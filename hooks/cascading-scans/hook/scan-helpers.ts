@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -6,10 +6,11 @@ import * as k8s from "@kubernetes/client-node";
 
 import {
   generateSelectorString,
-  LabelSelector
+  LabelSelector,
 } from "./kubernetes-label-selector";
 import {isEqual} from "lodash";
 import {getScanChain} from "./hook";
+import {ScopeLimiterRequirement} from "./scope-limiter";
 
 // configure k8s client
 const kc = new k8s.KubeConfig();
@@ -52,6 +53,7 @@ export interface Matches {
 export interface Scan {
   metadata: k8s.V1ObjectMeta;
   spec: ScanSpec;
+  status?: ScanStatus;
 }
 
 export interface ScanSpec {
@@ -63,51 +65,102 @@ export interface ScanSpec {
   volumeMounts?: Array<k8s.V1VolumeMount>;
   initContainers?: Array<k8s.V1Container>;
   hookSelector?: LabelSelector;
+  tolerations?: Array<k8s.V1Toleration>;
+  affinity?: k8s.V1Toleration;
+  resourceMode: "clusterWide" | "namespaceLocal";
+}
+
+export interface ScopeLimiter {
+  validOnMissingRender: boolean;
+  anyOf?: Array<ScopeLimiterRequirement>;
+  allOf?: Array<ScopeLimiterRequirement>;
+  noneOf?: Array<ScopeLimiterRequirement>;
 }
 
 export interface CascadingInheritance {
-  inheritLabels: boolean,
-  inheritAnnotations: boolean,
-  inheritEnv: boolean,
-  inheritVolumes: boolean,
-  inheritInitContainers: boolean,
-  inheritHookSelector: boolean,
+  scopeLimiter: ScopeLimiter;
+  inheritLabels: boolean;
+  inheritAnnotations: boolean;
+  inheritEnv: boolean;
+  inheritVolumes: boolean;
+  inheritInitContainers: boolean;
+  inheritHookSelector: boolean;
+  inheritAffinity: boolean;
+  inheritTolerations: boolean;
 }
 
-export function mergeInheritedMap(parentProps, ruleProps, inherit: boolean = true) {
+export interface ScanStatus {
+  rawResultType: string;
+}
+
+export interface ParseDefinition {
+  metadata: k8s.V1ObjectMeta;
+  spec: ParseDefinitionSpec;
+}
+
+export interface ParseDefinitionSpec {
+  scopeLimiterAliases: ScopeLimiterAliases;
+}
+
+export type ScopeLimiterAliases = {[key: string]: string};
+
+export function mergeInheritedMap(
+  parentProps,
+  ruleProps,
+  inherit: boolean = true
+) {
   if (!inherit) {
     parentProps = {};
   }
+  if (ruleProps === undefined) {
+    return parentProps;
+  }
   return {
     ...parentProps,
-    ...ruleProps // ruleProps overwrites any duplicate keys from parentProps
-  }
+    ...ruleProps, // ruleProps overwrites any duplicate keys from parentProps
+  };
 }
 
-export function mergeInheritedArray(parentArray = [], ruleArray = [], inherit: boolean = false) {
+export function mergeInheritedArray(
+  parentArray = [],
+  ruleArray = [],
+  inherit: boolean = false
+) {
   if (!inherit) {
     parentArray = [];
   }
-  return (parentArray || []).concat(ruleArray)  // CascadingRule's env overwrites scan's env
+  return (parentArray || []).concat(ruleArray); // CascadingRule's env overwrites scan's env
 }
 
-export function mergeInheritedSelector(parentSelector: LabelSelector = {}, ruleSelector: LabelSelector = {}, inherit: boolean = false): LabelSelector {
+export function mergeInheritedSelector(
+  parentSelector: LabelSelector = {},
+  ruleSelector: LabelSelector = {},
+  inherit: boolean = false
+): LabelSelector {
   let labelSelector: LabelSelector = {};
   if (parentSelector.matchExpressions || ruleSelector.matchExpressions) {
-    labelSelector.matchExpressions = mergeInheritedArray(parentSelector.matchExpressions, ruleSelector.matchExpressions, inherit);
+    labelSelector.matchExpressions = mergeInheritedArray(
+      parentSelector.matchExpressions,
+      ruleSelector.matchExpressions,
+      inherit
+    );
   }
   if (parentSelector.matchLabels || ruleSelector.matchLabels) {
-    labelSelector.matchLabels = mergeInheritedMap(parentSelector.matchLabels, ruleSelector.matchLabels, inherit);
+    labelSelector.matchLabels = mergeInheritedMap(
+      parentSelector.matchLabels,
+      ruleSelector.matchLabels,
+      inherit
+    );
   }
-  return labelSelector
+  return labelSelector;
 }
 
 export async function startSubsequentSecureCodeBoxScan(scan: Scan) {
-  console.log(`Starting Scan ${scan.metadata.name}`);
+  console.log(`Starting Scan ${scan.metadata.generateName}`);
 
   try {
     // Submitting the Scan to the kubernetes api
-    await k8sApiCRD.createNamespacedCustomObject(
+    const createdScan = await k8sApiCRD.createNamespacedCustomObject(
       "execution.securecodebox.io",
       "v1",
       namespace,
@@ -115,8 +168,9 @@ export async function startSubsequentSecureCodeBoxScan(scan: Scan) {
       scan,
       "false"
     );
+    console.log(`-> Created scan ${createdScan.body["metadata"].name}`);
   } catch (error) {
-    console.error(`Failed to start Scan ${scan.metadata.name}`);
+    console.error(`Failed to start Scan ${scan.metadata.generateName}`);
     console.error(error);
   }
 }
@@ -142,6 +196,7 @@ export async function getCascadingRulesForScan(scan: Scan) {
       undefined,
       undefined,
       undefined,
+      undefined,
       labelSelector
     );
 
@@ -154,52 +209,109 @@ export async function getCascadingRulesForScan(scan: Scan) {
   }
 }
 
+export async function getParseDefinitionForScan(scan: Scan) {
+  try {
+    const response: any = await k8sApiCRD.getNamespacedCustomObject(
+      "execution.securecodebox.io",
+      "v1",
+      namespace,
+      "parsedefinitions",
+      scan.status.rawResultType
+    );
+
+    return response.body;
+  } catch (err) {
+    console.error(
+      `Failed to get ParseDefinition ${scan.status.rawResultType} from the kubernetes api`
+    );
+    console.error(err);
+    process.exit(1);
+  }
+}
+
 // To ensure that the environment variables and volumes from the cascading rule are only applied to the matched scan
 // (and not its children), this function purges the cascading rule spec from the parent scan when inheriting them.
-export function purgeCascadedRuleFromScan(scan: Scan, cascadedRuleUsedForParentScan?: CascadingRule) : Scan {
+export function purgeCascadedRuleFromScan(
+  scan: Scan,
+  cascadedRuleUsedForParentScan?: CascadingRule
+): Scan {
   // If there was no cascading rule applied to the parent scan, then ignore no purging is necessary.
   if (cascadedRuleUsedForParentScan === undefined) return scan;
 
-  if (scan.spec.env !== undefined && cascadedRuleUsedForParentScan.spec.scanSpec.env !== undefined) {
-    scan.spec.env = scan.spec.env.filter(scanEnv =>
-      !cascadedRuleUsedForParentScan.spec.scanSpec.env.some(ruleEnv => isEqual(scanEnv, ruleEnv))
+  if (
+    scan.spec.env !== undefined &&
+    cascadedRuleUsedForParentScan.spec.scanSpec.env !== undefined
+  ) {
+    scan.spec.env = scan.spec.env.filter(
+      (scanEnv) =>
+        !cascadedRuleUsedForParentScan.spec.scanSpec.env.some((ruleEnv) =>
+          isEqual(scanEnv, ruleEnv)
+        )
     );
   }
 
-  if (scan.spec.volumes !== undefined && cascadedRuleUsedForParentScan.spec.scanSpec.volumes !== undefined) {
-    scan.spec.volumes = scan.spec.volumes.filter(scanVolume =>
-      !cascadedRuleUsedForParentScan.spec.scanSpec.volumes.some(ruleVolume => isEqual(scanVolume, ruleVolume))
+  if (
+    scan.spec.volumes !== undefined &&
+    cascadedRuleUsedForParentScan.spec.scanSpec.volumes !== undefined
+  ) {
+    scan.spec.volumes = scan.spec.volumes.filter(
+      (scanVolume) =>
+        !cascadedRuleUsedForParentScan.spec.scanSpec.volumes.some(
+          (ruleVolume) => isEqual(scanVolume, ruleVolume)
+        )
     );
   }
 
-  if (scan.spec.volumeMounts !== undefined && cascadedRuleUsedForParentScan.spec.scanSpec.volumeMounts !== undefined) {
-    scan.spec.volumeMounts = scan.spec.volumeMounts.filter(scanVolumeMount =>
-      !cascadedRuleUsedForParentScan.spec.scanSpec.volumeMounts.some(ruleVolumeMount => isEqual(scanVolumeMount, ruleVolumeMount))
+  if (
+    scan.spec.volumeMounts !== undefined &&
+    cascadedRuleUsedForParentScan.spec.scanSpec.volumeMounts !== undefined
+  ) {
+    scan.spec.volumeMounts = scan.spec.volumeMounts.filter(
+      (scanVolumeMount) =>
+        !cascadedRuleUsedForParentScan.spec.scanSpec.volumeMounts.some(
+          (ruleVolumeMount) => isEqual(scanVolumeMount, ruleVolumeMount)
+        )
     );
   }
 
-  if (scan.spec.hookSelector !== undefined && cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector !== undefined) {
-    if (scan.spec.hookSelector.matchExpressions !== undefined && cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector.matchExpressions !== undefined) {
-      scan.spec.hookSelector.matchExpressions = scan.spec.hookSelector.matchExpressions.filter(scanHookSelector =>
-        !cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector.matchExpressions.some(ruleHookSelector => isEqual(scanHookSelector, ruleHookSelector))
-      );
+  if (
+    scan.spec.hookSelector !== undefined &&
+    cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector !== undefined
+  ) {
+    if (
+      scan.spec.hookSelector.matchExpressions !== undefined &&
+      cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector
+        .matchExpressions !== undefined
+    ) {
+      scan.spec.hookSelector.matchExpressions =
+        scan.spec.hookSelector.matchExpressions.filter(
+          (scanHookSelector) =>
+            !cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector.matchExpressions.some(
+              (ruleHookSelector) => isEqual(scanHookSelector, ruleHookSelector)
+            )
+        );
     }
-    if (scan.spec.hookSelector.matchLabels !== undefined && cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector.matchLabels !== undefined) {
-      for (const label in cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector.matchLabels) {
-        delete scan.spec.hookSelector.matchLabels[label]
+    if (
+      scan.spec.hookSelector.matchLabels !== undefined &&
+      cascadedRuleUsedForParentScan.spec.scanSpec.hookSelector.matchLabels !==
+        undefined
+    ) {
+      for (const label in cascadedRuleUsedForParentScan.spec.scanSpec
+        .hookSelector.matchLabels) {
+        delete scan.spec.hookSelector.matchLabels[label];
       }
     }
   }
 
-  return scan
+  return scan;
 }
 
 export async function getCascadedRuleForScan(scan: Scan) {
-  const chain = getScanChain(scan)
+  const chain = getScanChain(scan);
 
   if (chain.length === 0) return undefined;
 
-  return <CascadingRule> await getCascadingRule(chain[chain.length - 1]);
+  return <CascadingRule>await getCascadingRule(chain[chain.length - 1]);
 }
 
 async function getCascadingRule(ruleName) {
@@ -212,10 +324,14 @@ async function getCascadingRule(ruleName) {
       ruleName
     );
 
-    console.log(`Fetched CascadingRule "${ruleName}" that triggered parent scan`);
+    console.log(
+      `Fetched CascadingRule "${ruleName}" that triggered parent scan`
+    );
     return response.body;
   } catch (err) {
-    console.error(`Failed to get CascadingRule "${ruleName}" from the kubernetes api`);
+    console.error(
+      `Failed to get CascadingRule "${ruleName}" from the kubernetes api`
+    );
     console.error(err);
     process.exit(1);
   }

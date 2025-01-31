@@ -1,11 +1,11 @@
 <!--
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 -->
 
 If you don't want to use our predefined rule files you can easily provide your own
-gitleaks rules config file. Therefore create a configMap from your rules file.
+gitleaks rules config file. To do this, create a `configMap` from your rules file:
 
 ```bash
 kubectl create configmap --from-file /path/to/my/gitleaks-config.toml gitleaks-config

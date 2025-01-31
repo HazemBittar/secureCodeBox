@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -11,7 +11,7 @@ const HIGH = "HIGH";
  *
  * @param {string} category
  */
-function categorize({ id }) {
+function categorize({id}) {
   if (id === 999957) {
     return ["X-Frame-Options Header", LOW];
   } else if (id === 999102) {
@@ -41,37 +41,68 @@ function categorize({ id }) {
   return ["Nikto Finding", INFORMATIONAL];
 }
 
-async function parse({ host, ip, port: portString, banner, vulnerabilities }) {
-  const port = parseInt(portString, 10);
+async function parse(niktoReport) {
+  if (!niktoReport) return [];
 
-  if (!vulnerabilities) // empty file
-    return [];
+  return niktoReport.flatMap(
+    ({host, ip, port: portString, banner, vulnerabilities}) => {
+      const port = parseInt(portString, 10);
 
-  return vulnerabilities.filter(Boolean).map(({ id, method, url, msg }) => {
-    const niktoId = parseInt(id, 10);
+      if (!vulnerabilities)
+        // empty file
+        return [];
 
-    const [category, severity] = categorize({ id: niktoId });
+      return vulnerabilities
+        .filter(Boolean)
+        .map(({id, method, url, msg, references}) => {
+          const niktoId = parseInt(id, 10);
 
-    // We can only guess at this point. Nikto doesn't tell use anymore :(
-    const protocol = port === 443 || port === 8443 ? "https" : "http";
+          const [category, severity] = categorize({id: niktoId});
 
-    return {
-      name: msg.trimRight(),
-      description: null,
-      category,
-      location: `${protocol}://${host}${url}`,
-      osi_layer: "NETWORK",
-      severity,
-      attributes: {
-        ip_address: ip,
-        hostname: host,
-        banner,
-        method,
-        port,
-        niktoId,
-      },
-    };
-  });
+          // We can only guess at this point. Nikto doesn't tell use anymore :(
+          const protocol = port === 443 || port === 8443 ? "https" : "http";
+
+          // Create a regular expression to extract the CWE reference number
+          const regex = new RegExp("\\d*(?=\\.html)");
+
+          const refs = references
+            ? [
+                {
+                  type: "URL",
+                  value: references,
+                },
+                // If the references string starts with a CWE URL, add a CWE reference object
+                ...(references.startsWith("https://cwe.mitre.org")
+                  ? [
+                      {
+                        type: "CWE",
+                        value: `CWE-${references.match(regex)[0]}`,
+                      },
+                    ]
+                  : []),
+              ]
+            : null;
+
+          return {
+            name: msg.trimRight(),
+            description: null,
+            category,
+            location: `${protocol}://${host}${url}`,
+            osi_layer: "NETWORK",
+            severity,
+            attributes: {
+              ip_addresses: [ip],
+              hostname: host,
+              banner,
+              method,
+              port,
+              niktoId,
+              references: refs,
+            },
+          };
+        });
+    }
+  );
 }
 
 module.exports.parse = parse;

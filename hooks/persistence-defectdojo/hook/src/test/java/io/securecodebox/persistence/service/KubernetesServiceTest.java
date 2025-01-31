@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class KubernetesServiceTest {
 
   @Test
-  public void calculatesFindingStatsCorrectly() throws Exception{
+  void calculatesFindingStatsCorrectly() throws Exception{
     var findings = List.of(
       SecureCodeBoxFinding.builder().category("Open Port").severity(SecureCodeBoxFinding.Severities.INFORMATIONAL).build(),
       SecureCodeBoxFinding.builder().category("Open Port").severity(SecureCodeBoxFinding.Severities.INFORMATIONAL).build(),
@@ -45,7 +45,7 @@ class KubernetesServiceTest {
   }
 
   @Test
-  public void calculatesFindingStatsForEmptyFindingsCorrectly() throws Exception{
+  void calculatesFindingStatsForEmptyFindingsCorrectly() throws Exception{
     List<SecureCodeBoxFinding> secureCodeBoxFindings = List.of();
 
     var actualStats = KubernetesService.recalculateFindingStats(secureCodeBoxFindings);

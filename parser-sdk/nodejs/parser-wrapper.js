@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -27,6 +27,7 @@ async function uploadResultToFileStorageService(
   return axios
     .put(resultUploadUrl, findingsWithIdsAndDates, {
       headers: { "content-type": "" },
+      maxBodyLength: Infinity,
     })
     .catch(function (error) {
       if (error.response) {
@@ -108,22 +109,49 @@ async function extractScan() {
     console.error(err);
     process.exit(1);
   }
+
 }
+
+async function extractParseDefinition(scan) {
+  try {
+    const { body } = await k8sApi.getNamespacedCustomObject(
+      "execution.securecodebox.io",
+      "v1",
+      namespace,
+      "parsedefinitions",
+      scan.status.rawResultType
+    );
+    return body;
+  } catch (err) {
+    console.error("Failed to get ParseDefinition from the kubernetes api");
+    console.error(err);
+    process.exit(1);
+  }
+}
+
+
+
 
 async function main() {
   console.log("Starting Parser");
   let scan = await extractScan();
-
+  let parseDefinition = await extractParseDefinition(scan);
   const resultFileUrl = process.argv[2];
   const resultUploadUrl = process.argv[3];
 
   console.log("Fetching result file");
-  const { data } = await axios.get(resultFileUrl);
+  let response;
+  if(parseDefinition.spec.contentType === "Binary"){
+    response = await axios.get(resultFileUrl, {responseType: 'arraybuffer'});
+  } else {
+    response = await axios.get(resultFileUrl);
+  }
+
   console.log("Fetched result file");
 
   let findings = [];
   try {
-    findings = await parse(data, scan);
+    findings = await parse(response.data, scan);
   } catch (error) {
     console.error("Parser failed with error:");
     console.error(error);

@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
-const { scan } = require("../../../tests/integration/helpers");
+const { scan } = require("../../../tests/integration/helpers.js");
 
 jest.retryTimes(0);
 
@@ -14,20 +14,24 @@ test(
       "semgrep",
       [
         "-c",
-        "p/ci",
-        "/test/",
+        "r/python.django.security.injection.command.command-injection-os-system.command-injection-os-system",
+        "/test-semgrep/",
       ],
       90,
       // volumes
-      [{
-          "name": "test-dir",
-          "configMap": {"name": "semgrep-test-file"}
-      }],
+      [
+        {
+          name: "test-dir",
+          configMap: { name: "semgrep-test-file" },
+        },
+      ],
       // volumeMounts
-      [{
-          "mountPath": "/test/",
-          "name": "test-dir"
-      }],
+      [
+        {
+          mountPath: "/test-semgrep/",
+          name: "test-dir",
+        },
+      ],
     );
 
     expect(count).toBe(3);
@@ -35,7 +39,7 @@ test(
       "security": 3,
     });
     expect(severities).toEqual({
-      medium: 3,
+      high: 3,
     });
   },
   3 * 60 * 1000

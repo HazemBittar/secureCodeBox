@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -54,3 +54,22 @@ spec:
           name: {{ .Values.authentication.apiKeySecret }}
           key: id
 {{- end }}
+    {{ if .Values.hook.env }}
+    {{- toYaml .Values.hook.env | nindent 4 }}
+    {{ end }}
+  affinity:
+    {{- toYaml .Values.hook.affinity | nindent 4 }}
+  tolerations:
+    {{- toYaml .Values.hook.tolerations | nindent 4 }}
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.hook.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  volumes:
+    {{- toYaml .Values.hook.extraVolumes | nindent 4 }}
+  volumeMounts:
+    {{- toYaml .Values.hook.extraVolumeMounts | nindent 4 }}

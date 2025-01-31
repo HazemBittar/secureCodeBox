@@ -1,10 +1,13 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 # Default values for dispatcher.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
+
+# -- Define imagePullSecrets when a private registry is used (see: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)
+imagePullSecrets: []
 
 # indexPrefix -- Define a specific index prefix used for all elasticsearch indices.
 indexPrefix: "scbv2"
@@ -39,13 +42,15 @@ elasticsearch:
   minimumMasterNodes: 1
   # image: docker.elastic.co/elasticsearch/elasticsearch-oss
 
-# kibana -- Configures included Elasticsearch subchart
+# -- Configures included Elasticsearch subchart
 kibana:
-  # kibana.enabled -- Enable if you want to deploy an kibana service (see: https://github.com/elastic/helm-charts/tree/master/kibana)
+  # -- Enable if you want to deploy an kibana service (see: https://github.com/elastic/helm-charts/tree/master/kibana)
   enabled: true
   # image: docker.elastic.co/kibana/kibana-oss
 
 dashboardImporter:
+  # -- Enable if you want to import some example kibana dashboards for secureCodeBox findings analytics.
+  enabled: true
   image:
     # image.repository -- Image repository for the dashboard importer job
     repository: securecodebox/persistence-elastic-dashboard-importer
@@ -53,7 +58,6 @@ dashboardImporter:
     # @default -- defaults to the charts version
     tag: null
 
-imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
@@ -94,3 +98,22 @@ hook:
 
   # hook.ttlSecondsAfterFinished -- Seconds after which the kubernetes job for the hook will be deleted. Requires the Kubernetes TTLAfterFinished controller: https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/
   ttlSecondsAfterFinished: null
+
+  # hook.affinity -- Optional affinity settings that control how the hook job is scheduled (see: https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/)
+  affinity: {}
+
+  # hook.tolerations -- Optional tolerations settings that control how the hook job is scheduled (see: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
+  tolerations: []
+
+  # -- Optional resources lets you control resource limits and requests for the hook container. See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+  # @default -- `{ requests: { cpu: "200m", memory: "100Mi" }, limits: { cpu: "400m", memory: "200Mi" } }`
+  resources: {}
+
+  # hook.extraVolumes -- Optional Volumes mapped into the hook (see: https://kubernetes.io/docs/concepts/storage/volumes/)
+  extraVolumes: []
+
+  # hook.extraVolumeMounts -- Optional VolumeMounts mapped into the hook (see: https://kubernetes.io/docs/concepts/storage/volumes/)
+  extraVolumeMounts: []
+
+  # hook.env -- Optional environment variables mapped into the hook (see: https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/)
+  env: []

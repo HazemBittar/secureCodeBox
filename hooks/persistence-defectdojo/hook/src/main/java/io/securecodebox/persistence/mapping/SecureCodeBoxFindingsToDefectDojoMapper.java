@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: the secureCodeBox authors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package io.securecodebox.persistence.mapping;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -9,6 +13,7 @@ import io.securecodebox.persistence.config.PersistenceProviderConfig;
 import io.securecodebox.persistence.models.DefectDojoImportFinding;
 import io.securecodebox.persistence.models.SecureCodeBoxFinding;
 import io.securecodebox.persistence.service.KubernetesService;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,15 +23,15 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 
+@Slf4j
 public class SecureCodeBoxFindingsToDefectDojoMapper {
-  private static final Logger LOG = LoggerFactory.getLogger(KubernetesService.class);
   private final DateTimeFormatter ddDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
   private final ObjectWriter attributeJsonPrinter = new ObjectMapper().writer(new DefaultPrettyPrinter()
     .withObjectIndenter(new DefaultIndenter().withLinefeed("\n")));
   private PersistenceProviderConfig ppConfig;
 
-  public SecureCodeBoxFindingsToDefectDojoMapper(PersistenceProviderConfig ppConfig){
-    this.ppConfig= ppConfig;
+  public SecureCodeBoxFindingsToDefectDojoMapper(PersistenceProviderConfig ppConfig) {
+    this.ppConfig = ppConfig;
   }
 
   protected String convertToDefectDojoSeverity(SecureCodeBoxFinding.Severities severity) {
@@ -53,7 +58,7 @@ public class SecureCodeBoxFindingsToDefectDojoMapper {
    * @param secureCodeBoxFinding Finding in SecureCodeBox format.
    * @return Finding in DefectDojo Format, compatible with the DefectDojo Generic JSON Parser
    */
-  public DefectDojoImportFinding fromSecureCodeBoxFinding(SecureCodeBoxFinding secureCodeBoxFinding){
+  public DefectDojoImportFinding fromSecureCodeBoxFinding(SecureCodeBoxFinding secureCodeBoxFinding) {
     //set basic Finding info
     DefectDojoImportFinding result = new DefectDojoImportFinding();
     result.setTitle(secureCodeBoxFinding.getName());
@@ -66,7 +71,7 @@ public class SecureCodeBoxFindingsToDefectDojoMapper {
         var attributesJson = attributeJsonPrinter.writeValueAsString(secureCodeBoxFinding.getAttributes());
         description = description + "\n " + attributesJson;
       } catch (JsonProcessingException e) {
-        LOG.warn("Could not write the secureCodeBox Finding Attributes as JSON: ",e);
+        log.warn("Could not write the secureCodeBox Finding Attributes as JSON: ", e);
       }
     }
     result.setDescription(description);
@@ -81,7 +86,7 @@ public class SecureCodeBoxFindingsToDefectDojoMapper {
         URI.create(secureCodeBoxFinding.getLocation());
         result.setEndpoints(Collections.singletonList(secureCodeBoxFinding.getLocation()));
       } catch (IllegalArgumentException e) {
-        LOG.warn("Couldn't parse the secureCodeBox location, because it: {} is not a vailid uri: {}", e, secureCodeBoxFinding.getLocation());
+        log.warn("Couldn't parse the secureCodeBox location, because it: {} is not a valid uri: {}", e, secureCodeBoxFinding.getLocation());
       }
     }
   }
@@ -90,21 +95,12 @@ public class SecureCodeBoxFindingsToDefectDojoMapper {
     Instant instant;
     if (secureCodeBoxFinding.getIdentifiedAt() != null && !secureCodeBoxFinding.getIdentifiedAt().isEmpty()) {
       instant = Instant.parse(secureCodeBoxFinding.getIdentifiedAt());
-    } else if (secureCodeBoxFinding.getParsedAt() != null && !secureCodeBoxFinding.getParsedAt().isEmpty()){
+    } else if (secureCodeBoxFinding.getParsedAt() != null && !secureCodeBoxFinding.getParsedAt().isEmpty()) {
       instant = Instant.parse(secureCodeBoxFinding.getParsedAt());
-    }
-    else {
+    } else {
       instant = Instant.now();
     }
     LocalDateTime localDateTime = LocalDateTime.ofInstant(instant, ppConfig.getDefectDojoTimezoneId());
     result.setDate(ddDateFormatter.format(localDateTime));
-  }
-
-  private static String capitalize(String str) {
-    if (str == null || str.isEmpty()) {
-      return str;
-    }
-
-    return str.substring(0, 1).toUpperCase() + str.substring(1);
   }
 }

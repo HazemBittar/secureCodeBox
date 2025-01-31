@@ -1,5 +1,5 @@
 {{- /*
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 */ -}}
@@ -22,14 +22,21 @@ usecase: "Cascading Scans based declarative Rules."
 
 {{- define "extra.chartAboutSection" -}}
 ## What is "Cascading Scans" Hook about?
-The Cascading Scans Hook can be used to orchestrate security scanners based on defined rule sets.
-The so called `CascadingRules` consist of a `matches` section which contains one or multiple rules which are compared against `findings`. When a `finding` matches a `rule` the `scanSpec` section will then be used to create a new scan. To customize the scan to match the finding, the [mustache](https://github.com/janl/mustache.js) templating language can be used to reference fields of the finding.
 
-This Hook is based on the ADR https://docs.securecodebox.io/docs/architecture/adr/adr_0003
+The Cascading Scans Hook can be used to start additional scans based on the results of other scans.
+This allows you to create powerful setups to automatically discover targets, and then trigger more specialized scans for the type of target that was discovered.
+
+![Diagram of CascadingScans showing one amass scans for example.com finding two subdomains. These then trigger a port scan each. An identified ssh port then gets a SSH Scan and a Ncrack scan triggered. A https port gets a sslyze and a nuclei scan triggered.](https://www.securecodebox.io/img/cascades.drawio.svg)
+
+The so called `CascadingRules` consist of a `matches` section which contains one or multiple rules which are compared against `findings`.
+When a `finding` matches a `rule` the `scanSpec` section will then be used to create a new scan.
+To customize the scan to match the finding, the [mustache](https://github.com/janl/mustache.js) templating language can be used to reference fields of the finding.
+
+This Hook is based on the ADR https://www.securecodebox.io/docs/architecture/architecture_decisions/adr_0003/
 
 More information about how to use cascading scans can be found here:
-* Custom Resource Definition: https://docs.securecodebox.io/docs/api/crds/cascading-rule/
-* How-To Network Scanning: https://docs.securecodebox.io/docs/how-tos/scanning-networks/
+* Custom Resource Definition: https://www.securecodebox.io/docs/api/crds/cascading-rule/
+* How-To Network Scanning: https://www.securecodebox.io/docs/how-tos/scanning-networks/
 
 {{- end }}
 
@@ -53,15 +60,15 @@ There is a configuration option `cascadingRules.enabled` for each scanner to pre
 ```bash
 # Check your CascadingRules
 kubectl get CascadingRules
-NAME             STARTS              INVASIVENESS   INTENSIVENESS
-https-tls-scan   sslyze              non-invasive   light
-imaps-tls-scan   sslyze              non-invasive   light
-nikto-http       nikto               non-invasive   medium
-nmap-smb         nmap                non-invasive   light
-pop3s-tls-scan   sslyze              non-invasive   light
-smtps-tls-scan   sslyze              non-invasive   light
-ssh-scan         ssh-scan            non-invasive   light
-zap-http         zap-baseline-scan   non-invasive   medium
+NAME              STARTS              INVASIVENESS   INTENSIVENESS
+https-tls-scan    sslyze              non-invasive   light
+imaps-tls-scan    sslyze              non-invasive   light
+nikto-http        nikto               non-invasive   medium
+nmap-smb          nmap                non-invasive   light
+pop3s-tls-scan    sslyze              non-invasive   light
+smtps-tls-scan    sslyze              non-invasive   light
+ssh-audit         ssh-audit            non-invasive   light
+zap-http          zap-baseline-scan   non-invasive   medium
 ```
 
 ### Starting a cascading Scan
@@ -91,13 +98,13 @@ You can lookup which CascadingRules this selects by running:
 
 ```bash
 kubectl get CascadingRules -l "securecodebox.io/intensive=light"
-NAME             STARTS     INVASIVENESS   INTENSIVENESS
-https-tls-scan   sslyze     non-invasive   light
-imaps-tls-scan   sslyze     non-invasive   light
-nmap-smb         nmap       non-invasive   light
-pop3s-tls-scan   sslyze     non-invasive   light
-smtps-tls-scan   sslyze     non-invasive   light
-ssh-scan         ssh-scan   non-invasive   light
+NAME              STARTS     INVASIVENESS   INTENSIVENESS
+https-tls-scan    sslyze     non-invasive   light
+imaps-tls-scan    sslyze     non-invasive   light
+nmap-smb          nmap       non-invasive   light
+pop3s-tls-scan    sslyze     non-invasive   light
+smtps-tls-scan    sslyze     non-invasive   light
+ssh-audit         ssh-audit   non-invasive   light
 ```
 
 The label selectors also allow the more powerful matchExpressions selectors:
@@ -127,15 +134,15 @@ This selection can be replicated in kubectl using:
 
 ```bash
 kubectl get CascadingRules -l "securecodebox.io/intensive in (light,medium)"
-NAME             STARTS              INVASIVENESS   INTENSIVENESS
-https-tls-scan   sslyze              non-invasive   light
-imaps-tls-scan   sslyze              non-invasive   light
-nikto-http       nikto               non-invasive   medium
-nmap-smb         nmap                non-invasive   light
-pop3s-tls-scan   sslyze              non-invasive   light
-smtps-tls-scan   sslyze              non-invasive   light
-ssh-scan         ssh-scan            non-invasive   light
-zap-http         zap-baseline-scan   non-invasive   medium
+NAME              STARTS              INVASIVENESS   INTENSIVENESS
+https-tls-scan    sslyze              non-invasive   light
+imaps-tls-scan    sslyze              non-invasive   light
+nikto-http        nikto               non-invasive   medium
+nmap-smb          nmap                non-invasive   light
+pop3s-tls-scan    sslyze              non-invasive   light
+smtps-tls-scan    sslyze              non-invasive   light
+ssh-audit         ssh-audit            non-invasive   light
+zap-http          zap-baseline-scan   non-invasive   medium
 ```
 {{- end }}
 

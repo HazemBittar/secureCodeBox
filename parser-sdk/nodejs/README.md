@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: the secureCodeBox authors
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Parser SDK
 
 The Parser SDK provides Parser functionalities that are used by all Scanners like starting the corresponding Parser, enriching the Scan Status in Kubernetes with Parser Results and adding additional attributes to the "Findings.json".
@@ -24,7 +30,7 @@ docker build ./scanners/nikto/parser -t securecodebox/parser-nikto:local-dev --b
 helm upgrade nikto scanners/nikto --install --set parserImage.repository=securecodebox/parser-nikto,parserImage.tag=local-dev
 ```
 
-If you add a scan configuration called "scan-config.yaml" to the current directory (nikto examples [here](https://docs.securecodebox.io/docs/scanners/nikto#demo-juice-shop)) you can run the Scan with:
+If you add a scan configuration called "scan-config.yaml" to the current directory (nikto examples [here](https://www.securecodebox.io/docs/scanners/nikto#demo-juice-shop)) you can run the Scan with:
 
 ```bash
 kubectl apply -f scan-config.yaml

@@ -1,5 +1,5 @@
 {{- /*
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 */ -}}
@@ -26,7 +26,7 @@ usecase: "Discover Git repositories"
 ## What is Git-Repo-Scanner?
 
 Git-Repo-Scanner is a small Python script which discovers repositories on GitHub or GitLab. The main purpose of this scanner
-is to provide a cascading input for the [gitleaks](/docs/scanners/gitleaks) and [semgrep](/docs/scanners/semgrep) scanners.
+is to provide a cascading input for the [gitleaks](https://www.securecodebox.io/docs/scanners/gitleaks) and [semgrep](https://www.securecodebox.io/docs/scanners/semgrep) scanners.
 {{- end }}
 
 {{- define "extra.scannerConfigurationSection" -}}
@@ -44,7 +44,7 @@ or
 #### GitHub
 For type GitHub you can use the following options:
 - `--organization`: The name of the GitHub organization you want to scan.
-- `--url`: The url of the api for a GitHub enterprise server. Skip this option for repos on <https://github.com>.
+- `--url`: The url of the api for a GitHub enterprise server. Skip this option for repos on [https://github.com](https://github.com).
 - `--access-token`: Your personal GitHub access token (needs full `repo` rights if you want to also find private repositories, otherwise `repo:status` and `public_repo` is sufficient).
 - `--ignore-repos`: A list of GitHub repository ids you want to ignore
 - `--obey-rate-limit`: True to obey the rate limit of the GitHub server (default), otherwise False

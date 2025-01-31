@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -13,7 +13,7 @@ async function parse({ vulnerabilities = [], nodes = [] }) {
 
     let location = vulnerability.location;
     if (location.startsWith('Local to Pod')) {
-      // This is a pod specific vulnarability.
+      // This is a pod specific vulnerability.
       // As this does not fit the secureCodeBox model to well we will scope this to the first "Node/Master" type node of the cluster.
       // This is subject to change.
 

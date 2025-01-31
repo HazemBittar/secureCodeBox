@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: the secureCodeBox authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 apiVersion: "execution.securecodebox.io/v1"
 kind: Scan
 metadata:
@@ -18,7 +22,7 @@ spec:
     - name: "provision-git"
       image: bitnami/git
       command:
-        - git 
+        - git
         - clone
         - "https://github.com/we45/Vulnerable-Flask-App"
         - /test/flask

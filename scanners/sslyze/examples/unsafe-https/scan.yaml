@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -11,5 +11,5 @@ metadata:
 spec:
   scanType: "sslyze"
   parameters:
-    - "--regular"
+    - "--mozilla_config=intermediate"
     - "unsafe-https"

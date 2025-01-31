@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -14,14 +14,16 @@ kubeVersion: ">=v1.11.0-0"
 
 annotations:
   versionApi: https://api.github.com/repos/urbanadventurer/WhatWeb/releases/latest
+  # supported cpu architectures for which docker images for the scanner should be build
+  supported-platforms: linux/amd64
 
 keywords:
   - security
   - whatweb
   - scanner
   - secureCodeBox
-home: https://docs.securecodebox.io/docs/scanners/Whatweb
-icon: https://docs.securecodebox.io/img/integrationIcons/Whatweb.svg
+home: https://www.securecodebox.io/docs/scanners/Whatweb
+icon: https://www.securecodebox.io/img/integrationIcons/Whatweb.svg
 sources:
   - https://github.com/secureCodeBox/secureCodeBox
 maintainers:

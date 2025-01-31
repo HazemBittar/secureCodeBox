@@ -1,6 +1,9 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
+
+//go:build fast
+// +build fast
 
 package controllers
 
@@ -21,7 +24,7 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 // Define utility constants for object names and testing timeouts and intervals.
 const (
-	timeout  = time.Second * 10
+	timeout  = time.Second * 25
 	interval = time.Millisecond * 250
 )
 
@@ -33,10 +36,10 @@ var _ = Describe("ScanType controller", func() {
 
 			createNamespace(ctx, namespace)
 			createScanType(ctx, namespace)
-			scheduledScan := createScheduledScan(ctx, namespace)
+			scheduledScan := createScheduledScanWithInterval(ctx, namespace, true, 42*time.Hour, executionv1.ForbidConcurrent)
 
 			// ensure that the ScheduledScan has been triggered
-			waitForScheduledScanToBeTriggered(ctx, namespace)
+			waitForScheduledScanToBeTriggered(ctx, namespace, timeout)
 			k8sClient.Get(ctx, types.NamespacedName{Name: "test-scan", Namespace: namespace}, &scheduledScan)
 			initialExecutionTime := *scheduledScan.Status.LastScheduleTime
 
@@ -74,10 +77,10 @@ var _ = Describe("ScanType controller", func() {
 
 			createNamespace(ctx, namespace)
 			createScanType(ctx, namespace)
-			scheduledScan := createScheduledScan(ctx, namespace)
+			scheduledScan := createScheduledScanWithInterval(ctx, namespace, true, 42*time.Hour, executionv1.ForbidConcurrent)
 
 			// ensure that the ScheduledScan has been triggered
-			waitForScheduledScanToBeTriggered(ctx, namespace)
+			waitForScheduledScanToBeTriggered(ctx, namespace, timeout)
 			k8sClient.Get(ctx, types.NamespacedName{Name: "test-scan", Namespace: namespace}, &scheduledScan)
 			initialExecutionTime := *scheduledScan.Status.LastScheduleTime
 
@@ -96,9 +99,50 @@ var _ = Describe("ScanType controller", func() {
 			}, timeout, interval).Should(BeTrue(), "Scan was restarted without need")
 		})
 	})
+
+	Context("Should not trigger rescan when RetriggerOnScanTypeChange is set to False", func() {
+		It("Should restart a scheduledScan when RetriggerOnScanTypeChange is set to True", func() {
+			ctx := context.Background()
+			namespace := "scantype-retrigger-on-scantype-false-test"
+
+			createNamespace(ctx, namespace)
+			createScanType(ctx, namespace)
+			scheduledScan := createScheduledScanWithInterval(ctx, namespace, false, 42*time.Hour, executionv1.ForbidConcurrent)
+
+			// ensure that the ScheduledScan has been triggered
+			waitForScheduledScanToBeTriggered(ctx, namespace, timeout)
+			k8sClient.Get(ctx, types.NamespacedName{Name: "test-scan", Namespace: namespace}, &scheduledScan)
+			initialExecutionTime := *scheduledScan.Status.LastScheduleTime
+
+			// wait at least one second to ensure that the unix timestamps are at least one second apart.
+			time.Sleep(1 * time.Second)
+
+			By("Update ScanType to trigger rescan")
+			var scanType executionv1.ScanType
+			k8sClient.Get(ctx, types.NamespacedName{Name: "nmap", Namespace: namespace}, &scanType)
+			if scanType.ObjectMeta.Annotations == nil {
+				scanType.ObjectMeta.Annotations = map[string]string{}
+			}
+			scanType.ObjectMeta.Annotations["foobar.securecodebox.io/example"] = "barfoo"
+			err := k8sClient.Update(ctx, &scanType)
+			if err != nil {
+				panic(err)
+			}
+
+			By("Controller should set the lastScheduled Timestamp to the past to force a re-scan")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "test-scan", Namespace: namespace}, &scheduledScan)
+				if errors.IsNotFound(err) {
+					panic("ScheduledScan should be present for this check!")
+				}
+
+				return scheduledScan.Status.LastScheduleTime.Unix() == initialExecutionTime.Unix()
+			}, timeout, interval).Should(BeTrue())
+		})
+	})
 })
 
-func waitForScheduledScanToBeTriggered(ctx context.Context, namespace string) {
+func waitForScheduledScanToBeTriggered(ctx context.Context, namespace string, timeout time.Duration) {
 	var scheduledScan executionv1.ScheduledScan
 	By("Wait for ScheduledScan to trigger the initial Scan")
 	Eventually(func() bool {

@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
-const { scan } = require("../helpers");
+const {scan} = require("../helpers");
 const k8s = require("@kubernetes/client-node");
 
 jest.retryTimes(3);

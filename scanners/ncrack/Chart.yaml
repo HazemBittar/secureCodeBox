@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -13,15 +13,16 @@ appVersion: "0.7"
 kubeVersion: ">=v1.11.0-0"
 
 annotations:
-  versionApi: https://api.github.com/repos/nmap/ncrack/releases/latest 
-
+  versionApi: https://api.github.com/repos/nmap/ncrack/releases/latest
+  # supported cpu architectures for which docker images for the scanner should be build
+  supported-platforms: linux/amd64
 keywords:
   - security
   - ncrack
   - scanner
   - secureCodeBox
-home: https://docs.securecodebox.io/docs/scanners/Ncrack
-icon: https://docs.securecodebox.io/img/integrationIcons/Ncrack.svg
+home: https://www.securecodebox.io/docs/scanners/Ncrack
+icon: https://www.securecodebox.io/img/integrationIcons/Ncrack.svg
 sources:
   - https://github.com/secureCodeBox/secureCodeBox
 maintainers:

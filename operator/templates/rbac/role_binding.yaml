@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -11,6 +11,6 @@ roleRef:
   kind: ClusterRole
   name: manager-role
 subjects:
-- kind: ServiceAccount
-  name: {{ .Values.serviceAccount.name }}
-  namespace: {{ .Release.Namespace }}
+  - kind: ServiceAccount
+    name: {{.Values.serviceAccount.name}}
+    namespace: {{.Release.Namespace}}

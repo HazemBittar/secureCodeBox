@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -29,7 +29,8 @@ func checkIfAllJobsCompleted(jobs *batch.JobList) jobCompletionType {
 	hasCompleted := true
 
 	for _, job := range jobs.Items {
-		if job.Status.Failed > 0 {
+		// Check if the job has failed and the reason is "BackoffLimitExceeded"
+		if isBackoffLimitExceeded(job) {
 			return failed
 		} else if job.Status.Succeeded == 0 {
 			hasCompleted = false
@@ -109,4 +110,16 @@ func injectCustomCACertsIfConfigured(job *batch.Job) {
 		Name:  "NODE_EXTRA_CA_CERTS",
 		Value: mountPath,
 	})
+}
+
+// isBackoffLimitExceeded checks if a job has failed due to exceeding the backoff limit
+func isBackoffLimitExceeded(job batch.Job) bool {
+	if job.Status.Failed > 0 {
+		for _, condition := range job.Status.Conditions {
+			if condition.Reason == "BackoffLimitExceeded" {
+				return true
+			}
+		}
+	}
+	return false
 }

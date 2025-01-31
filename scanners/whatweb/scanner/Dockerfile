@@ -1,10 +1,10 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 FROM ruby:latest
 
-ARG scannerVersion=v0.5.5
+ARG scannerVersion
 RUN git clone --depth 1 --branch $scannerVersion https://github.com/urbanadventurer/WhatWeb.git \
     && cd WhatWeb \
     && make install

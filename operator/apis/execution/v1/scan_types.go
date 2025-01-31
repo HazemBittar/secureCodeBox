@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -14,6 +14,10 @@ import (
 
 // CascadeSpec describes how and when cascading scans should be generated.
 type CascadeSpec struct {
+	// InheritLabels defines whether cascading scans should inherit labels from the parent scan
+	// +optional
+	ScopeLimiter ScopeLimiter `json:"scopeLimiter"`
+
 	// InheritLabels defines whether cascading scans should inherit labels from the parent scan
 	// +optional
 	// +kubebuilder:default=true
@@ -44,6 +48,16 @@ type CascadeSpec struct {
 	// +kubebuilder:default=false
 	InheritHookSelector bool `json:"inheritHookSelector"`
 
+	// InheritAffinity defines whether cascading scans should inherit affinity from the parent scan.
+	// +optional
+	// +kubebuilder:default=true
+	InheritAffinity bool `json:"inheritAffinity"`
+
+	// InheritTolerations defines whether cascading scans should inherit tolerations from the parent scan.
+	// +optional
+	// +kubebuilder:default=true
+	InheritTolerations bool `json:"inheritTolerations"`
+
 	// matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
 	// map is equivalent to an element of matchExpressions, whose key field is "key", the
 	// operator is "In", and the values array contains only "value". The requirements are ANDed.
@@ -54,6 +68,43 @@ type CascadeSpec struct {
 	MatchExpressions []metav1.LabelSelectorRequirement `json:"matchExpressions,omitempty" protobuf:"bytes,2,rep,name=matchExpressions"`
 }
 
+type ScopeLimiter struct {
+	// ValidOnMissingRender defines whether if a templating variable is not present, that condition should match
+	// +optional
+	// +kubebuilder:default=false
+	ValidOnMissingRender bool `json:"validOnMissingRender"`
+
+	// AnyOf is a list of label selector requirements. The requirements are ANDed.
+	// +optional
+	AnyOf []ScopeLimiterRequirement `json:"anyOf,omitempty" protobuf:"bytes,2,rep,name=anyOf"`
+
+	// AllOf is a list of label selector requirements. The requirements are ANDed.
+	// +optional
+	AllOf []ScopeLimiterRequirement `json:"allOf,omitempty" protobuf:"bytes,2,rep,name=allOf"`
+
+	// NoneOf is a list of label selector requirements. The requirements are ANDed.
+	// +optional
+	NoneOf []ScopeLimiterRequirement `json:"noneOf,omitempty" protobuf:"bytes,2,rep,name=noneOf"`
+}
+
+// ScopeLimiterRequirement is a selector that contains values, a key, and an operator that
+// relates the key and values.
+type ScopeLimiterRequirement struct {
+	// key is the label key that the selector applies to.
+	Key string `json:"key" protobuf:"bytes,1,opt,name=key"`
+	// operator represents a key's relationship to a set of values.
+	Operator string `json:"operator" protobuf:"bytes,2,opt,name=operator"`
+	// values is an array of string values.
+	Values []string `json:"values" protobuf:"bytes,3,rep,name=values"`
+}
+
+type ResourceMode string
+
+const (
+	ClusterWide    ResourceMode = "clusterWide"
+	NamespaceLocal ResourceMode = "namespaceLocal"
+)
+
 // ScanSpec defines the desired state of Scan
 type ScanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -62,6 +113,12 @@ type ScanSpec struct {
 	// The name of the scanType which should be started.
 	// +kubebuilder:validation:Required
 	ScanType string `json:"scanType,omitempty"`
+
+	// The Resource Mode of the scan: Should it use namespace-local or cluster-wide resources (ScanType vs. ClusterScanType)
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:=namespaceLocal
+	// +kubebuilder:validation:Enum="namespaceLocal";"clusterWide"
+	ResourceMode *ResourceMode `json:"resourceMode"`
 
 	// All CLI parameters to configure the scan container.
 	// +kubebuilder:validation:Required
@@ -78,15 +135,42 @@ type ScanSpec struct {
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 	// InitContainers allows to specify init containers for the scan container, to pre-load data into them.
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+	// NodeSelector allows to specify a node selector, to control on which nodes you want a scan to run. See: https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// Affinity allows to specify a node affinity, to control on which nodes you want a scan to run. See: https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+	// Tolerations are a different way to control on which nodes your scan is executed. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 
 	Cascades *CascadeSpec `json:"cascades,omitempty"`
+
+	// Resources lets you control resource limits and requests for the parser container. See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	// ttlSecondsAfterFinished limits the lifetime of a Scan that has finished execution (either Done or Errored). If this field is set ttlSecondsAfterFinished after the Scan finishes, it is eligible to be automatically deleted. When the Scan is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Scan won't be automatically deleted. If this is set to zero, the Scan becomes eligible to be deleted immediately after it finishes.
+	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
 }
+
+type ScanState string
+
+const (
+	ScanStateInit                       ScanState = "Init"
+	ScanStateScanning                   ScanState = "Scanning"
+	ScanStateScanCompleted              ScanState = "ScanCompleted"
+	ScanStateParsing                    ScanState = "Parsing"
+	ScanStateParseCompleted             ScanState = "ParseCompleted"
+	ScanStateHookProcessing             ScanState = "HookProcessing"
+	ScanStateReadAndWriteHookProcessing ScanState = "ReadAndWriteHookProcessing"
+	ScanStateReadAndWriteHookCompleted  ScanState = "ReadAndWriteHookCompleted"
+	ScanStateReadOnlyHookProcessing     ScanState = "ReadOnlyHookProcessing"
+	ScanStateErrored                    ScanState = "Errored"
+	ScanStateDone                       ScanState = "Done"
+)
 
 // ScanStatus defines the observed state of Scan
 type ScanStatus struct {
-	State string `json:"state,omitempty"`
+	State ScanState `json:"state,omitempty"`
 
-	// FinishedAt contains the time where the scan (including parser & hooks) has been marked as "Done"
+	// FinishedAt contains the time where the scan (including parser & hooks) has been marked as "Done", or "Errored"
 	FinishedAt       *metav1.Time `json:"finishedAt,omitempty"`
 	ErrorDescription string       `json:"errorDescription,omitempty"`
 

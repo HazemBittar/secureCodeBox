@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,7 +15,7 @@
 # Call with --scanners / --demo-targets / --hooks to only install the wanted resources
 # Call with --help for usage information
 #
-# For more information see https://docs.securecodebox.io/
+# For more information see https://www.securecodebox.io/
 
 set -euo pipefail
 shopt -s extglob
@@ -28,8 +28,8 @@ COLOR_ERROR="\e[31m"
 COLOR_RESET="\e[0m"
 
 # @see: http://wiki.bash-hackers.org/syntax/shellvars
-[ -z "${SCRIPT_DIRECTORY:-}" ] \
-  && SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+[ -z "${SCRIPT_DIRECTORY:-}" ] &&
+  SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 
 BASE_DIR=$(dirname "${SCRIPT_DIRECTORY}")
 
@@ -57,7 +57,8 @@ function print() {
 
 function printHelp() {
   local help
-  help=$(cat <<- EOT
+  help=$(
+    cat <<-EOT
 $USAGE
 The installation is interactive if no arguments are provided.
 
@@ -117,7 +118,7 @@ function createNamespaceAndInstallOperator() {
 
   print "Installing the operator in the '$SCB_SYSTEM_NAMESPACE' namespace"
 
-  if [[ $(helm -n "$SCB_SYSTEM_NAMESPACE" upgrade --install securecodebox-operator "$BASE_DIR/operator/") ]]; then
+  if [[ $(helm -n "$SCB_SYSTEM_NAMESPACE" upgrade --install securecodebox-operator oci://ghcr.io/securecodebox/helm/operator) ]]; then
     print "$COLOR_OK" "Successfully installed the operator in namespace '$SCB_SYSTEM_NAMESPACE'!"
   else
     print "$COLOR_ERROR" "Operator installation failed in namespace '$SCB_SYSTEM_NAMESPACE', cancelling installation!" && exit 1
@@ -146,8 +147,8 @@ function installResources() {
 
   if [[ $unattended == 'true' ]]; then
     for resource in "${resources[@]}"; do
-      helm upgrade --install -n "$namespace" "$resource" "$resource_directory"/"$resource"/ \
-      || print "$COLOR_ERROR" "Installation of '$resource' failed"
+      helm upgrade --install -n "$namespace" "$resource" oci://ghcr.io/securecodebox/helm/"$resource" ||
+        print "$COLOR_ERROR" "Installation of '$resource' failed"
     done
 
   else
@@ -157,14 +158,14 @@ function installResources() {
       read -r line
 
       if [[ $line == *[Yy] ]]; then
-        helm upgrade --install -n "$namespace" "$resource" "$resource_directory"/"$resource"/ \
-        || print "$COLOR_ERROR" "Installation of '$resource' failed"
+        helm upgrade --install -n "$namespace" "$resource" oci://ghcr.io/securecodebox/helm/"$resource" ||
+          print "$COLOR_ERROR" "Installation of '$resource' failed"
       fi
     done
   fi
 
   print
-  print "$COLOR_OK" "Completed to install '$resource_directory'!"
+  print "$COLOR_OK" "Completed to install '$resource'!"
 }
 
 function welcomeToInteractiveInstall() {
@@ -250,43 +251,43 @@ function unattendedInstall() {
 
 function parseArguments() {
   if [[ $# == 0 ]]; then
-      INSTALL_INTERACTIVE='true'
-      return
+    INSTALL_INTERACTIVE='true'
+    return
   fi
 
-  while (( "$#" )); do
-        case "$1" in
-          --scanners)
-            INSTALL_SCANNERS='true'
-            shift # Pop current argument from array
-            ;;
-          --demo-targets)
-            INSTALL_DEMO_TARGETS='true'
-            shift
-            ;;
-          --hooks)
-            INSTALL_HOOKS='true'
-            shift
-            ;;
-          --all)
-            INSTALL_SCANNERS='true'
-            INSTALL_DEMO_TARGETS='true'
-            INSTALL_HOOKS='true'
-            shift
-            ;;
-          -h|--help)
-            printHelp
-            exit
-            ;;
-          --*) # unsupported flags
-            print "Error: Unsupported flag $1" >&2
-            print "$USAGE"
-            exit 1
-            ;;
-          *) # preserve positional arguments
-            shift
-            ;;
-        esac
+  while (("$#")); do
+    case "$1" in
+    --scanners)
+      INSTALL_SCANNERS='true'
+      shift # Pop current argument from array
+      ;;
+    --demo-targets)
+      INSTALL_DEMO_TARGETS='true'
+      shift
+      ;;
+    --hooks)
+      INSTALL_HOOKS='true'
+      shift
+      ;;
+    --all)
+      INSTALL_SCANNERS='true'
+      INSTALL_DEMO_TARGETS='true'
+      INSTALL_HOOKS='true'
+      shift
+      ;;
+    -h | --help)
+      printHelp
+      exit
+      ;;
+    --*) # unsupported flags
+      print "Error: Unsupported flag $1" >&2
+      print "$USAGE"
+      exit 1
+      ;;
+    *) # preserve positional arguments
+      shift
+      ;;
+    esac
   done
 }
 
@@ -308,10 +309,14 @@ fi
 
 exitIfKubectlIsNotInstalled
 exitIfHelmIsNotInstalled
+
+# Add the Helm repository
+helm repo add secureCodeBox https://charts.securecodebox.io
+
 createNamespaceAndInstallOperator
 
 if [[ -n "${INSTALL_INTERACTIVE}" ]]; then
-    interactiveInstall
+  interactiveInstall
 else
-    unattendedInstall
+  unattendedInstall
 fi

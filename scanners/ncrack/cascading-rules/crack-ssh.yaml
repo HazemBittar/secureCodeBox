@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -30,6 +30,6 @@ spec:
       - /ncrack/users.txt
       - -P
       - /ncrack/passwords.txt
-      - -p 
+      - -p
       - ssh:{{attributes.port}}
       - "{{$.hostOrIP}}"

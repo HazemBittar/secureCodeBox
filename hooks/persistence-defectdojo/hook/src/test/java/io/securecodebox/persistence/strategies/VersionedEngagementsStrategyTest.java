@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 package io.securecodebox.persistence.strategies;
@@ -7,9 +7,9 @@ import io.kubernetes.client.openapi.models.V1ObjectMeta;
 import io.securecodebox.models.V1ScanSpec;
 import io.securecodebox.models.V1ScanStatus;
 import io.securecodebox.persistence.config.PersistenceProviderConfig;
-import io.securecodebox.persistence.defectdojo.config.DefectDojoConfig;
-import io.securecodebox.persistence.defectdojo.models.ScanFile;
-import io.securecodebox.persistence.defectdojo.models.User;
+import io.securecodebox.persistence.defectdojo.config.Config;
+import io.securecodebox.persistence.defectdojo.model.ScanFile;
+import io.securecodebox.persistence.defectdojo.model.UserProfile;
 import io.securecodebox.persistence.defectdojo.service.*;
 import io.securecodebox.persistence.exceptions.DefectDojoPersistenceException;
 import io.securecodebox.persistence.models.Scan;
@@ -22,14 +22,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class VersionedEngagementsStrategyTest {
+class VersionedEngagementsStrategyTest {
 
   @InjectMocks
   VersionedEngagementsStrategy versionedEngagementsStrategy;
@@ -39,7 +38,7 @@ public class VersionedEngagementsStrategyTest {
   @Mock
   ProductTypeService productTypeService;
   @Mock
-  UserService userService;
+  UserProfileService userProfileService;
   @Mock
   ToolTypeService toolTypeService;
   @Mock
@@ -51,11 +50,14 @@ public class VersionedEngagementsStrategyTest {
   @Mock
   ImportScanService importScanService;
 
+  @Mock
+  Config config;
+
   Scan scan;
 
   @BeforeEach
-  public void setup() throws Exception {
-    versionedEngagementsStrategy.config = new DefectDojoConfig("https://defectdojo.example.com", "<key>", "foobar", 1000);
+  public void setup() {
+    versionedEngagementsStrategy.config = config;
     versionedEngagementsStrategy.persistenceProviderConfig = new PersistenceProviderConfig(new String[]{"http://example.com","http://example.com"});
 
     scan = new Scan();
@@ -73,7 +75,7 @@ public class VersionedEngagementsStrategyTest {
   @Test
   @DisplayName("Fails when Configured User can not be looked up in the DefectDojo API")
   void requiresUserToBeFound() throws Exception {
-    when(userService.searchUnique(any(User.class))).thenReturn(Optional.empty());
+    when(userProfileService.search()).thenReturn(new ArrayList<>());
 
     Assertions.assertThrows(DefectDojoPersistenceException.class, () -> {
       versionedEngagementsStrategy.run(scan, new ScanFile("nmap.xml","<!-- Nmap Report -->"));

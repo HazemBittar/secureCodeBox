@@ -1,15 +1,15 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
-const { scan } = require("../../../tests/integration/helpers");
+const { scan } = require("../../../tests/integration/helpers.js");
 
 jest.retryTimes(3);
 
 test(
   "localhost port scan should only find a host finding",
   async () => {
-    const { categories, severities, count } = await scan(
+    const {categories, severities, count} = await scan(
       "nmap-localhost",
       "nmap",
       ["localhost"],
@@ -18,12 +18,12 @@ test(
 
     expect(count).toBe(1);
     expect(categories).toMatchInlineSnapshot(`
-      Object {
+      {
         "Host": 1,
       }
     `);
     expect(severities).toMatchInlineSnapshot(`
-      Object {
+      {
         "informational": 1,
       }
     `);

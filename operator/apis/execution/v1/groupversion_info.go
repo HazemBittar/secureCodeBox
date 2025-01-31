@@ -1,10 +1,10 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
 // Package v1 contains API Schema definitions for the execution v1 API group
-//+kubebuilder:object:generate=true
-//+groupName=execution.securecodebox.io
+// +kubebuilder:object:generate=true
+// +groupName=execution.securecodebox.io
 package v1
 
 import (

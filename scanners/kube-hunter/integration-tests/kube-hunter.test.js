@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
-const { scan } = require("../../../tests/integration/helpers");
+const { scan } = require("../../../tests/integration/helpers.js");
 
 jest.retryTimes(3);
 
@@ -16,7 +16,7 @@ test(
       4 * 60
     );
 
-    // If we got here the scan succeded
+    // If we got here the scan succeeded
     // as the number of findings will depend on the cluster, we just check if it is defined at all
     expect(true).toBe(true);
   },

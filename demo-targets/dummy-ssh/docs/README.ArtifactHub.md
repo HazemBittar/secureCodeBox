@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 -->
@@ -18,16 +18,16 @@ Otherwise your changes will be reverted/overwritten automatically due to the bui
 <p align="center">
   <a href="https://opensource.org/licenses/Apache-2.0"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"/></a>
   <a href="https://github.com/secureCodeBox/secureCodeBox/releases/latest"><img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/secureCodeBox/secureCodeBox?sort=semver"/></a>
-  <a href="https://owasp.org/www-project-securecodebox/"><img alt="OWASP Incubator Project" src="https://img.shields.io/badge/OWASP-Incubator%20Project-365EAA"/></a>
+  <a href="https://owasp.org/www-project-securecodebox/"><img alt="OWASP Lab Project" src="https://img.shields.io/badge/OWASP-Lab%20Project-yellow"/></a>
   <a href="https://artifacthub.io/packages/search?repo=securecodebox"><img alt="Artifact HUB" src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/securecodebox"/></a>
   <a href="https://github.com/secureCodeBox/secureCodeBox/"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/secureCodeBox/secureCodeBox?logo=GitHub"/></a>
-  <a href="https://twitter.com/securecodebox"><img alt="Twitter Follower" src="https://img.shields.io/twitter/follow/securecodebox?style=flat&color=blue&logo=twitter"/></a>
+  <a href="https://infosec.exchange/@secureCodeBox"><img alt="Mastodon Follower" src="https://img.shields.io/mastodon/follow/111902499714281911?domain=https%3A%2F%2Finfosec.exchange%2F"/></a>
 </p>
 
 ## What is OWASP secureCodeBox?
 
 <p align="center">
-  <img alt="secureCodeBox Logo" src="https://docs.securecodebox.io/img/Logo_Color.svg" width="250px"/>
+  <img alt="secureCodeBox Logo" src="https://www.securecodebox.io/img/Logo_Color.svg" width="250px"/>
 </p>
 
 _[OWASP secureCodeBox][scb-github]_ is an automated and scalable open source solution that can be used to integrate various *security vulnerability scanners* with a simple and lightweight interface. The _secureCodeBox_ mission is to support *DevSecOps* Teams to make it easy to automate security vulnerability testing in different scenarios.
@@ -36,9 +36,9 @@ With the _secureCodeBox_ we provide a toolchain for continuous scanning of appli
 
 The secureCodeBox project is running on [Kubernetes](https://kubernetes.io/). To install it you need [Helm](https://helm.sh), a package manager for Kubernetes. It is also possible to start the different integrated security vulnerability scanners based on a docker infrastructure.
 
-### Quickstart with secureCodeBox on kubernetes
+### Quickstart with secureCodeBox on Kubernetes
 
-You can find resources to help you get started on our [documentation website](https://docs.securecodebox.io) including instruction on how to [install the secureCodeBox project](https://docs.securecodebox.io/docs/getting-started/installation) and guides to help you [run your first scans](https://docs.securecodebox.io/docs/getting-started/first-scans) with it.
+You can find resources to help you get started on our [documentation website](https://www.securecodebox.io) including instruction on how to [install the secureCodeBox project](https://www.securecodebox.io/docs/getting-started/installation) and guides to help you [run your first scans](https://www.securecodebox.io/docs/getting-started/first-scans) with it.
 
 ## What is Dummy SSH?
 The Dummy SSH service is a vulnerable SSH Service which is aimed at people who are new to pen testing.
@@ -59,7 +59,7 @@ The dummy-ssh chart can be deployed via helm:
 
 ```bash
 # Install HelmChart (use -n to configure another namespace)
-helm upgrade --install dummy-ssh secureCodeBox/dummy-ssh
+helm upgrade --install dummy-ssh oci://ghcr.io/securecodebox/helm/dummy-ssh
 ```
 
 ## Values
@@ -72,7 +72,7 @@ helm upgrade --install dummy-ssh secureCodeBox/dummy-ssh
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. One of Always, Never, IfNotPresent. Defaults to Always if :latest tag is specified, or IfNotPresent otherwise. More info: https://kubernetes.io/docs/concepts/containers/images#updating-images |
 | image.repository | string | `"docker.io/securecodebox/dummy-ssh"` | Container Image |
 | image.tag | string | defaults to the appVersion | The image tag |
-| imagePullSecrets | list | `[]` |  |
+| imagePullSecrets | list | `[]` | Define imagePullSecrets when a private registry is used (see: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/) |
 | labels | object | `{}` | add labels to the deployment, service and pods |
 | nameOverride | string | `""` |  |
 | nodeSelector | object | `{}` |  |
@@ -94,8 +94,8 @@ Please have a look at [Contributing](./CONTRIBUTING.md)
 You are welcome, please join us on... 👋
 
 - [GitHub][scb-github]
-- [Slack][scb-slack]
-- [Twitter][scb-twitter]
+- [OWASP Slack (Channel #project-securecodebox)][scb-slack]
+- [Mastodon][scb-mastodon]
 
 secureCodeBox is an official [OWASP][scb-owasp] project.
 
@@ -104,11 +104,11 @@ secureCodeBox is an official [OWASP][scb-owasp] project.
 
 Code of secureCodeBox is licensed under the [Apache License 2.0][scb-license].
 
-[scb-owasp]: https://www.owasp.org/index.php/OWASP_secureCodeBox
-[scb-docs]: https://docs.securecodebox.io/
-[scb-site]: https://www.securecodebox.io/
-[scb-github]: https://github.com/secureCodeBox/
-[scb-twitter]: https://twitter.com/secureCodeBox
-[scb-slack]: https://join.slack.com/t/securecodebox/shared_invite/enQtNDU3MTUyOTM0NTMwLTBjOWRjNjVkNGEyMjQ0ZGMyNDdlYTQxYWQ4MzNiNGY3MDMxNThkZjJmMzY2NDRhMTk3ZWM3OWFkYmY1YzUxNTU
-[scb-license]: https://github.com/secureCodeBox/secureCodeBox/blob/master/LICENSE
+[scb-owasp]:    https://www.owasp.org/index.php/OWASP_secureCodeBox
+[scb-docs]:     https://www.securecodebox.io/
+[scb-site]:     https://www.securecodebox.io/
+[scb-github]:   https://github.com/secureCodeBox/
+[scb-mastodon]: https://infosec.exchange/@secureCodeBox
+[scb-slack]:    https://owasp.org/slack/invite
+[scb-license]:  https://github.com/secureCodeBox/secureCodeBox/blob/master/LICENSE
 

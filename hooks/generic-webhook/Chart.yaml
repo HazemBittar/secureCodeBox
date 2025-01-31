@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -16,8 +16,8 @@ keywords:
   - security
   - secureCodeBox
   - hook
-home: https://docs.securecodebox.io/docs/hooks/generic-webhook
-icon: https://docs.securecodebox.io/img/integrationIcons/Generic WebHook.svg
+home: https://www.securecodebox.io/docs/hooks/generic-webhook
+icon: https://www.securecodebox.io/img/integrationIcons/Generic WebHook.svg
 sources:
   - https://github.com/secureCodeBox/secureCodeBox
 maintainers:

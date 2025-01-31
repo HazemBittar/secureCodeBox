@@ -12,7 +12,8 @@
     "example": "example"
   },
   "scripts": {
-    "test": "jest"
+    "test:unit": "jest --verbose --testPathIgnorePatterns /integration-tests/ --ci --colors --coverage --passWithNoTests",
+    "test:integration": "jest --verbose --ci --colors --coverage --passWithNoTests"
   },
   "keywords": [
     "secureCodeBox",
@@ -39,21 +40,11 @@
   },
   "license": "Apache-2.0",
   "devDependencies": {
-    "@types/jest": "^26.0.24",
-    "jest": "^27.0.6"
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5"
   },
   "dependencies": {
-    "axios": "^0.22.0"
-  },
-  "jest": {
-    "projects": [
-      "<rootDir>/cascading-scans",
-      "<rootDir>/finding-post-processing",
-      "<rootDir>/generic-webhook",
-      "<rootDir>/notification/src",
-      "<rootDir>/persistence-defectdojo",
-      "<rootDir>/persistence-elastic",
-      "<rootDir>/update-field"
-    ]
+    "@kubernetes/client-node": "^0.22.3"
   }
 }
