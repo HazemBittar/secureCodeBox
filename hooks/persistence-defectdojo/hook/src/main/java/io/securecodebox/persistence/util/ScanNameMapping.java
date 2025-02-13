@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 package io.securecodebox.persistence.util;
@@ -12,36 +12,44 @@ public enum ScanNameMapping {
   ZAP_API_SCAN("zap-api-scan", ScanType.ZAP_SCAN),
   ZAP_FULL_SCAN("zap-full-scan", ScanType.ZAP_SCAN),
   ZAP_ADVANCED_SCAN("zap-advanced-scan", ScanType.ZAP_SCAN),
-  SSLYZE("sslyze", ScanType.SSLYZE_3_JSON_SCAN),
-  TRIVY("trivy", ScanType.TRIVY_SCAN),
+  ZAP_AUTOMATION_SCAN("zap-automation-scan", ScanType.ZAP_SCAN),
+  ZAP_AUTOMATION_FRAMEWORK("zap-automation-framework", ScanType.ZAP_SCAN),
+  SSLYZE("sslyze", ScanType.SSLYZE_SCAN),
+  TRIVY_IMAGE("trivy-image", ScanType.TRIVY_SCAN),
+  TRIVY_IMAGE_AUTODISCOVERY("trivy-image-autodiscovery", ScanType.TRIVY_SCAN),
+  TRIVY_FILESYSTEM("trivy-filesystem", ScanType.TRIVY_SCAN),
+  TRIVY_REPO("trivy-repo", ScanType.TRIVY_SCAN),
+  TRIVY_K8S("trivy-k8s", ScanType.TRIVY_SCAN),
   GITLEAKS("gitleaks", ScanType.GITLEAKS_SCAN),
   NIKTO("nikto", ScanType.NIKTO_SCAN),
   NUCLEI("nuclei", ScanType.NUCLEI_SCAN),
   WPSCAN("wpscan", ScanType.WPSCAN),
   SEMGREP("semgrep", ScanType.SEMGREP_JSON_REPORT),
-  GENERIC(null, ScanType.GENERIC_FINDINGS_IMPORT)
-  ;
+  GENERIC(null, ScanType.GENERIC_FINDINGS_IMPORT);
 
   /**
    * DefectDojo Scan Type
-   * Example: "Nmap Scan"
+   *
+   * @see ScanType
    */
-  public final ScanType scanType;
+  public final ScanType defectDojoScanType;
 
   /**
    * secureCodeBox ScanType
-   * Examples: "nmap", "zap-api-scan", "zap-baseline-scan"
+   * <p>
+   * Examples: {@literal "nmap"}, {@literal }"zap-api-scan"}, {@literal "zap-baseline-scan"}
+   * </p>
    */
-  public final String scbScanType;
+  public final String secureCodeBoxbScanType;
 
-  ScanNameMapping(String scbScanType, ScanType scanType) {
-    this.scbScanType = scbScanType;
-    this.scanType = scanType;
+  ScanNameMapping(String secureCodeBoxbScanType, ScanType defectDojoScanType) {
+    this.secureCodeBoxbScanType = secureCodeBoxbScanType;
+    this.defectDojoScanType = defectDojoScanType;
   }
 
   public static ScanNameMapping bySecureCodeBoxScanType(@NonNull String scanType) {
     for (var mapping : ScanNameMapping.values()) {
-      if (scanType.equals(mapping.scbScanType)) {
+      if (scanType.equals(mapping.secureCodeBoxbScanType)) {
         return mapping;
       }
     }

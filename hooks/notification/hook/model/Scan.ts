@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import * as k8s from "@kubernetes/client-node"
+import * as k8s from "@kubernetes/client-node";
 
 export interface Scan {
   metadata: k8s.V1ObjectMeta;

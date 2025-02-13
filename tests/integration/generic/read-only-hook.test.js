@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -10,7 +10,7 @@ jest.retryTimes(3);
 test(
   "should trigger a webhook",
   async () => {
-    await scan("test-scan-read-only-hook", "test-scan", [], 90);
+    await scan("test-scan-read-only-hook", "test-scan", ["hello-world"], 90);
 
     const WEBHOOK = "http-webhook";
     const NAMESPACE = "integration-tests";

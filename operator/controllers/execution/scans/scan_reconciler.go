@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -20,6 +20,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,20 +50,43 @@ func (r *ScanReconciler) startScan(scan *executionv1.Scan) error {
 	}
 
 	// get the ScanType for the scan
-	var scanType executionv1.ScanType
-	if err := r.Get(ctx, types.NamespacedName{Name: scan.Spec.ScanType, Namespace: scan.Namespace}, &scanType); err != nil {
-		log.V(7).Info("Unable to fetch ScanType")
+	var scanTypeSpec executionv1.ScanTypeSpec
+	if scan.Spec.ResourceMode == nil || *scan.Spec.ResourceMode == executionv1.NamespaceLocal {
+		var scanType executionv1.ScanType
+		if err := r.Get(ctx, types.NamespacedName{Name: scan.Spec.ScanType, Namespace: scan.Namespace}, &scanType); err != nil {
 
-		scan.Status.State = "Errored"
-		scan.Status.ErrorDescription = fmt.Sprintf("Configured ScanType '%s' not found in '%s' namespace. You'll likely need to deploy the ScanType.", scan.Spec.ScanType, scan.Namespace)
-		if err := r.Status().Update(ctx, scan); err != nil {
-			r.Log.Error(err, "unable to update Scan status")
-			return err
+			log.V(7).Info("Unable to fetch ScanType")
+
+			scan.Status.State = executionv1.ScanStateErrored
+			scan.Status.ErrorDescription = fmt.Sprintf("Configured ScanType '%s' not found in '%s' namespace. You'll likely need to deploy the ScanType.", scan.Spec.ScanType, scan.Namespace)
+			if err := r.updateScanStatus(ctx, scan); err != nil {
+				r.Log.Error(err, "unable to update Scan status")
+				return err
+			}
+
+			return fmt.Errorf("no ScanType of type '%s' found", scan.Spec.ScanType)
 		}
+		log.Info("Matching ScanType Found", "ScanType", scanType.Name)
+		scanTypeSpec = scanType.Spec
+	} else if *scan.Spec.ResourceMode == executionv1.ClusterWide {
+		var clusterScanType executionv1.ClusterScanType
 
-		return fmt.Errorf("No ScanType of type '%s' found", scan.Spec.ScanType)
+		if err := r.Get(ctx, types.NamespacedName{Name: scan.Spec.ScanType}, &clusterScanType); err != nil {
+			r.Log.Error(err, "Failing around")
+			log.V(7).Info("Unable to fetch ClusterScanType")
+
+			scan.Status.State = executionv1.ScanStateErrored
+			scan.Status.ErrorDescription = fmt.Sprintf("Configured ClusterScanType '%s' not found in global ClusterScanTypes. You'll likely need to deploy the ScanType.", scan.Spec.ScanType)
+			if err := r.updateScanStatus(ctx, scan); err != nil {
+				r.Log.Error(err, "unable to update Scan status")
+				return err
+			}
+
+			return fmt.Errorf("no ClusterScanType of type '%s' found", scan.Spec.ScanType)
+		}
+		log.Info("Matching ClusterScanType Found", "ClusterScanType", clusterScanType.Name)
+		scanTypeSpec = clusterScanType.Spec
 	}
-	log.Info("Matching ScanType Found", "ScanType", scanType.Name)
 
 	rules := []rbacv1.PolicyRule{
 		{
@@ -78,9 +102,9 @@ func (r *ScanReconciler) startScan(scan *executionv1.Scan) error {
 		rules,
 	)
 
-	job, err := r.constructJobForScan(scan, &scanType)
+	job, err := r.constructJobForScan(scan, &scanTypeSpec)
 	if err != nil {
-		log.Error(err, "unable to create job object ScanType")
+		log.Error(err, "unable to create job object from ScanType / ClusterScanType")
 		return err
 	}
 
@@ -91,40 +115,44 @@ func (r *ScanReconciler) startScan(scan *executionv1.Scan) error {
 		return err
 	}
 
-	scan.Status.State = "Scanning"
-	scan.Status.RawResultType = scanType.Spec.ExtractResults.Type
-	scan.Status.RawResultFile = filepath.Base(scanType.Spec.ExtractResults.Location)
+	scan.Status.State = executionv1.ScanStateScanning
+	scan.Status.RawResultType = scanTypeSpec.ExtractResults.Type
+	scan.Status.RawResultFile = filepath.Base(scanTypeSpec.ExtractResults.Location)
 
-	findingsDownloadURL, err := r.PresignedGetURL(scan.UID, "findings.json", 7*24*time.Hour)
+	urlExpirationDuration, err := util.GetUrlExpirationDuration(util.ScanController)
+	if err != nil {
+		r.Log.Error(err, "Failed to parse scan url expiration")
+		panic(err)
+	}
+
+	// this time is hardcoded as its not used internally by the scb so it should be longer lasting
+	findingsDownloadURL, err := r.PresignedGetURL(*scan, "findings.json", 7*24*time.Hour)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned url from s3 or compatible storage provider")
 		return err
 	}
 	scan.Status.FindingDownloadLink = findingsDownloadURL
-	rawResultDownloadURL, err := r.PresignedGetURL(scan.UID, scan.Status.RawResultFile, 7*24*time.Hour)
+	rawResultDownloadURL, err := r.PresignedGetURL(*scan, scan.Status.RawResultFile, 7*24*time.Hour)
 	if err != nil {
 		return err
 	}
 	scan.Status.RawResultDownloadLink = rawResultDownloadURL
 
-	findingsHeadURL, err := r.PresignedHeadURL(scan.UID, "findings.json", 7*24*time.Hour)
+	findingsHeadURL, err := r.PresignedHeadURL(*scan, "findings.json", urlExpirationDuration)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned head url from s3 or compatible storage provider")
 		return err
 	}
 	scan.Status.FindingHeadLink = findingsHeadURL
 
-	rawResultsHeadURL, err := r.PresignedHeadURL(scan.UID, scan.Status.RawResultFile, 7*24*time.Hour)
+	rawResultsHeadURL, err := r.PresignedHeadURL(*scan, scan.Status.RawResultFile, urlExpirationDuration)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned head url from s3 or compatible storage provider")
 		return err
 	}
 	scan.Status.RawResultHeadLink = rawResultsHeadURL
 
-	if err := r.Status().Update(ctx, scan); err != nil {
-		log.Error(err, "unable to update Scan status")
-		return err
-	}
+	r.updateScanStatus(ctx, scan)
 
 	log.V(7).Info("created Job for Scan", "job", job)
 	return nil
@@ -142,15 +170,15 @@ func (r *ScanReconciler) checkIfScanIsCompleted(scan *executionv1.Scan) error {
 	switch status {
 	case completed:
 		r.Log.V(7).Info("Scan is completed")
-		scan.Status.State = "ScanCompleted"
-		if err := r.Status().Update(ctx, scan); err != nil {
+		scan.Status.State = executionv1.ScanStateScanCompleted
+		if err := r.updateScanStatus(ctx, scan); err != nil {
 			r.Log.Error(err, "unable to update Scan status")
 			return err
 		}
 	case failed:
-		scan.Status.State = "Errored"
+		scan.Status.State = executionv1.ScanStateErrored
 		scan.Status.ErrorDescription = "Failed to run the Scan Container, check k8s Job and its logs for more details"
-		if err := r.Status().Update(ctx, scan); err != nil {
+		if err := r.updateScanStatus(ctx, scan); err != nil {
 			r.Log.Error(err, "unable to update Scan status")
 			return err
 		}
@@ -159,15 +187,20 @@ func (r *ScanReconciler) checkIfScanIsCompleted(scan *executionv1.Scan) error {
 	return nil
 }
 
-func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *executionv1.ScanType) (*batch.Job, error) {
-	filename := filepath.Base(scanType.Spec.ExtractResults.Location)
-	resultUploadURL, err := r.PresignedPutURL(scan.UID, filename, defaultPresignDuration)
+func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanTypeSpec *executionv1.ScanTypeSpec) (*batch.Job, error) {
+	filename := filepath.Base(scanTypeSpec.ExtractResults.Location)
+	urlExpirationDuration, err := util.GetUrlExpirationDuration(util.ScanController)
+	if err != nil {
+		r.Log.Error(err, "Failed to parse scan url expiration")
+		panic(err)
+	}
+	resultUploadURL, err := r.PresignedPutURL(*scan, filename, urlExpirationDuration)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned url from s3 or compatible storage provider")
 		return nil, err
 	}
 
-	if len(scanType.Spec.JobTemplate.Spec.Template.Spec.Containers) < 1 {
+	if len(scanTypeSpec.JobTemplate.Spec.Template.Spec.Containers) < 1 {
 		return nil, errors.New("ScanType must at least contain one container in which the scanner is running")
 	}
 
@@ -182,16 +215,27 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 			GenerateName: util.TruncateName(fmt.Sprintf("scan-%s", scan.Name)),
 			Namespace:    scan.Namespace,
 		},
-		Spec: *scanType.Spec.JobTemplate.Spec.DeepCopy(),
+		Spec: *scanTypeSpec.JobTemplate.Spec.DeepCopy(),
 	}
 
-	podAnnotations := scanType.Spec.JobTemplate.DeepCopy().Annotations
+	job.Spec.Template.Labels = util.MergeStringMaps(job.Spec.Template.Labels, scan.ObjectMeta.DeepCopy().Labels)
+
+	//add recommend kubernetes "managed by" label, to tell the SCB container autodiscovery to ignore the scan pod
+	podLabels := job.Spec.Template.Labels
+	if podLabels == nil {
+		podLabels = make(map[string]string)
+	}
+	podLabels["app.kubernetes.io/managed-by"] = "securecodebox"
+	job.Spec.Template.Labels = podLabels
+
+	podAnnotations := scanTypeSpec.JobTemplate.DeepCopy().Annotations
 	if podAnnotations == nil {
 		podAnnotations = make(map[string]string)
 	}
-	podAnnotations["securecodebox.io/job-type"] = "scanner"
+
+	podAnnotations["auto-discovery.securecodebox.io/ignore"] = "true"
 	// Ensuring that istio doesn't inject a sidecar proxy.
-	podAnnotations["sidecar.istio.io/inject"] = "false"
+	podAnnotations["sidecar.istio.io/inject"] = allowIstioSidecarInjectionInJobs
 	job.Spec.Template.Annotations = podAnnotations
 
 	if job.Spec.Template.Spec.ServiceAccountName == "" {
@@ -199,7 +243,7 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 	}
 
 	// merging volume definition from ScanType (if existing) with standard results volume
-	if job.Spec.Template.Spec.Containers[0].VolumeMounts == nil || len(job.Spec.Template.Spec.Containers[0].VolumeMounts) == 0 {
+	if len(job.Spec.Template.Spec.Containers[0].VolumeMounts) == 0 {
 		job.Spec.Template.Spec.Volumes = []corev1.Volume{}
 	}
 	job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, corev1.Volume{
@@ -210,7 +254,7 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 	})
 
 	// merging volume mounts (for the primary scanner container) from ScanType (if existing) with standard results volume mount
-	if job.Spec.Template.Spec.Containers[0].VolumeMounts == nil || len(job.Spec.Template.Spec.Containers[0].VolumeMounts) == 0 {
+	if len(job.Spec.Template.Spec.Containers[0].VolumeMounts) == 0 {
 		job.Spec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{}
 	}
 	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
@@ -220,6 +264,9 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 			MountPath: "/home/securecodebox/",
 		},
 	)
+
+	// Merge NodeSelectors from Scan into Scan job
+	job.Spec.Template.Spec.NodeSelector = util.MergeStringMaps(job.Spec.Template.Spec.NodeSelector, scan.Spec.NodeSelector)
 
 	// Get lurker image config from env
 	lurkerImage := os.Getenv("LURKER_IMAGE")
@@ -238,7 +285,7 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 	case "":
 		lurkerPullPolicy = corev1.PullAlways
 	default:
-		return nil, fmt.Errorf("Unknown imagePull Policy for lurker: %s", lurkerPullPolicyRaw)
+		return nil, fmt.Errorf("unknown imagePull Policy for lurker: %s", lurkerPullPolicyRaw)
 	}
 
 	falsePointer := false
@@ -252,7 +299,7 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 			"--container",
 			job.Spec.Template.Spec.Containers[0].Name,
 			"--file",
-			scanType.Spec.ExtractResults.Location,
+			scanTypeSpec.ExtractResults.Location,
 			"--url",
 			resultUploadURL,
 		},
@@ -324,7 +371,7 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 	}
 
 	command := append(
-		scanType.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Command,
+		scanTypeSpec.JobTemplate.Spec.Template.Spec.Containers[0].Command,
 		scan.Spec.Parameters...,
 	)
 
@@ -350,9 +397,55 @@ func (r *ScanReconciler) constructJobForScan(scan *executionv1.Scan, scanType *e
 		scan.Spec.InitContainers...,
 	)
 
+	if len(scan.Spec.Resources.Requests) != 0 || len(scan.Spec.Resources.Limits) != 0 {
+		job.Spec.Template.Spec.Containers[0].Resources = scan.Spec.Resources
+	}
+
+	// Set affinity from ScanTemplate
+	if scan.Spec.Affinity != nil {
+		job.Spec.Template.Spec.Affinity = scan.Spec.Affinity
+	}
+
+	// Replace (not merge!) tolerations from template with those specified in the scan job, if there are any.
+	// (otherwise keep those from the template)
+	if scan.Spec.Tolerations != nil {
+		job.Spec.Template.Spec.Tolerations = scan.Spec.Tolerations
+	}
+
 	// Using command over args
 	job.Spec.Template.Spec.Containers[0].Command = command
 	job.Spec.Template.Spec.Containers[0].Args = nil
 
 	return job, nil
+}
+
+func (r *ScanReconciler) checkIfTTLSecondsAfterFinishedIsCompleted(scan *executionv1.Scan) bool {
+	if scan.Spec.TTLSecondsAfterFinished == nil {
+		return false
+	}
+	interval := time.Duration(*scan.Spec.TTLSecondsAfterFinished) * time.Second
+	if scan.Status.FinishedAt != nil {
+		scanTimeout := scan.Status.FinishedAt.Add(interval)
+		now := time.Now()
+		if now.After(scanTimeout) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *ScanReconciler) deleteScan(scan *executionv1.Scan) error {
+	ctx := context.Background()
+	err := r.Client.Delete(ctx, scan)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.Info("Scan was already deleted, nothing to do")
+		} else {
+			r.Log.Error(err, "Unexpected error while trying to delete Scan")
+			return err
+		}
+	} else {
+		r.Log.Info("Scan was deleted successfully", "scan", scan.Name)
+	}
+	return nil
 }

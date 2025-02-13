@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: the secureCodeBox authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 apiVersion: v2
 name: semgrep
 description: A Helm chart for the semgrep semantic code analyzer that integrates with the secureCodeBox
@@ -18,17 +22,18 @@ version: "v3.1.0-alpha1"
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "0.75.0"
+appVersion: "1.108.0"
 annotations:
-  versionApi: https://api.github.com/repos/returntocorp/semgrep/releases/latest
+  versionApi: https://api.github.com/repos/semgrep/semgrep/releases/latest
+  supported-platforms: linux/amd64,linux/arm64
 kubeVersion: ">=v1.11.0-0"
-home: https://docs.securecodebox.io/docs/scanners/semgrep
-icon: https://docs.securecodebox.io/img/integrationIcons/semgrep.svg # TODO: Add this
+home: https://www.securecodebox.io/docs/scanners/semgrep
+icon: https://www.securecodebox.io/img/integrationIcons/semgrep.svg # TODO: Add this
 sources:
   - https://github.com/secureCodeBox/secureCodeBox
 maintainers:
   - name: iteratec GmbH
-  - email: secureCodeBox@iteratec.com
+    email: secureCodeBox@iteratec.com
 keywords:
   - security
   - semgrep

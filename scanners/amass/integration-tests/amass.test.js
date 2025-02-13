@@ -1,9 +1,8 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
 const { scan } = require("../../../tests/integration/helpers.js");
-
 jest.retryTimes(3);
 
 test(
@@ -12,10 +11,10 @@ test(
     const { count } = await scan(
       "amass-scanner-dummy-scan",
       "amass",
-      ["-passive", "-noalts", "-norecursive", "-d", "owasp.org"],
+      ["-norecursive", "-timeout", "1", "-d", "owasp.org"],
       180
     );
-    expect(count).toBeGreaterThanOrEqual(20);
+    expect(count).toBeGreaterThanOrEqual(100); // The scan is passive, so we can expect a lot of subdomains
   },
-  6 * 60 * 1000
+  10 * 60 * 1000
 );

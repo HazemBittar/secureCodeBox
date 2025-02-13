@@ -1,17 +1,19 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
 import { Finding } from "./model/Finding";
 import { NotificationChannel } from "./model/NotificationChannel";
 import { Scan } from "./model/Scan";
-import { NotifierFactory } from "./NotifierFactory"
+import { NotifierFactory } from "./NotifierFactory";
 import { SlackNotifier } from "./Notifiers/SlackNotifier";
 import { MSTeamsNotifier } from "./Notifiers/MSTeamsNotifier";
+import { TrelloNotifier } from "./Notifiers/TrelloNotifier";
 import { NotifierType } from "./NotifierType";
 
 const finding: Finding = {
   name: "test finding",
+  description: "test finding description",
   location: "hostname",
   category: "Open Port",
   severity: "high",
@@ -36,7 +38,7 @@ const scan: Scan = {
   },
   status: {
     findingDownloadLink:
-      "https://my-secureCodeBox-instance.com/scan-b9as-sdweref--sadf-asdfsdf-dasdgf-asdffdsfa7/findings.json",
+      "https://s3.securecodebox.example.com/scan-b9as-sdweref--sadf-asdfsdf-dasdgf-asdffdsfa7/findings.json",
     findings: {
       categories: {
         "A Client Error response code was returned by the server": 1,
@@ -53,7 +55,7 @@ const scan: Scan = {
     },
     finishedAt: new Date("2020-05-25T02:38:13Z"),
     rawResultDownloadLink:
-      "https://my-secureCodeBox-instance.com/scan-blkfsdg-sdgfsfgd-sfg-sdfg-dfsg-gfs98-e8af2172caa7/zap-results.json?Expires=1601691232",
+      "https://s3.securecodebox.example.com/scan-blkfsdg-sdgfsfgd-sfg-sdfg-dfsg-gfs98-e8af2172caa7/zap-results.json?Expires=1601691232",
     rawResultFile: "zap-results.json",
     rawResultType: "zap-json",
     state: "Done",
@@ -66,14 +68,14 @@ test("Should Create Slack Notifier", async () => {
     type: NotifierType.SLACK,
     template: "template",
     rules: [],
-    endPoint: "some.endpoint"
-  }
-  const findings: Finding[] = []
-  findings.push(finding)
+    endPoint: "some.endpoint",
+  };
+  const findings: Finding[] = [];
+  findings.push(finding);
   const s = NotifierFactory.create(chan, scan, findings, []);
 
   expect(s instanceof SlackNotifier).toBe(true);
-})
+});
 
 test("Should Create MS Teams Notifier", async () => {
   const chan: NotificationChannel = {
@@ -81,12 +83,28 @@ test("Should Create MS Teams Notifier", async () => {
     type: NotifierType.MS_TEAMS,
     template: "template",
     rules: [],
-    endPoint: "some.endpoint"
-  }
-  const findings: Finding[] = []
-  findings.push(finding)
+    endPoint: "some.endpoint",
+  };
+  const findings: Finding[] = [];
+  findings.push(finding);
 
   const s = NotifierFactory.create(chan, scan, findings, []);
 
   expect(s instanceof MSTeamsNotifier).toBe(true);
-})
+});
+
+test("Should Create Trello Notifier", async () => {
+  const chan: NotificationChannel = {
+    name: "trello",
+    type: NotifierType.TRELLO,
+    template: "template",
+    rules: [],
+    endPoint: "some.endpoint",
+  };
+  const findings: Finding[] = [];
+  findings.push(finding);
+
+  const s = NotifierFactory.create(chan, scan, findings, []);
+
+  expect(s instanceof TrelloNotifier).toBe(true);
+});

@@ -1,22 +1,25 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
 package scancontrollers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	batch "k8s.io/api/batch/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -42,8 +45,6 @@ var (
 // https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/#finalizers
 var s3StorageFinalizer = "s3.storage.securecodebox.io"
 
-const defaultPresignDuration = 12 * time.Hour
-
 // +kubebuilder:rbac:groups=execution.securecodebox.io,resources=scans,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=execution.securecodebox.io,resources=scans/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=execution.securecodebox.io,resources=scantypes,verbs=get;list;watch
@@ -55,7 +56,7 @@ const defaultPresignDuration = 12 * time.Hour
 // Pod permission are required to grant these permission to service accounts
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;watch;list;create
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;watch;list;create
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;watch;list;create;update
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;watch;list;create
 
 // Reconcile compares the scan object against the state of the cluster and updates both if needed
@@ -72,17 +73,17 @@ func (r *ScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	state := scan.Status.State
-	if state == "" {
-		state = "Init"
+	if scan.Status.State == "" {
+		scan.Status.State = executionv1.ScanStateInit
+		updateScanStateMetrics(scan)
 	}
 
-	log.V(5).Info("Scan Found", "Type", scan.Spec.ScanType, "State", state)
+	log.V(5).Info("Scan Found", "Type", scan.Spec.ScanType, "State", scan.Status.State)
 
 	// Handle Finalizer if the scan is getting deleted
 	if !scan.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Check if this Scan has not yet been converted to new CRD
-		if scan.Status.OrderedHookStatuses == nil && scan.Status.ReadAndWriteHookStatus != nil && scan.Status.State == "Done" {
+		if scan.Status.OrderedHookStatuses == nil && scan.Status.ReadAndWriteHookStatus != nil && scan.Status.State == executionv1.ScanStateDone {
 			if err := r.migrateHookStatus(&scan); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -94,25 +95,40 @@ func (r *ScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	var err error
-	switch state {
-	case "Init":
+	switch scan.Status.State {
+	case executionv1.ScanStateInit:
 		err = r.startScan(&scan)
-	case "Scanning":
+	case executionv1.ScanStateScanning:
 		err = r.checkIfScanIsCompleted(&scan)
-	case "ScanCompleted":
+	case executionv1.ScanStateScanCompleted:
 		err = r.startParser(&scan)
-	case "Parsing":
+	case executionv1.ScanStateParsing:
 		err = r.checkIfParsingIsCompleted(&scan)
-	case "ParseCompleted":
+	case executionv1.ScanStateParseCompleted:
 		err = r.setHookStatus(&scan)
-	case "HookProcessing":
+	case executionv1.ScanStateHookProcessing:
 		err = r.executeHooks(&scan)
-	case "ReadAndWriteHookProcessing":
+	case executionv1.ScanStateErrored:
+		if r.checkIfTTLSecondsAfterFinishedIsCompleted(&scan) {
+			err = r.deleteScan(&scan)
+		}
+	case executionv1.ScanStateDone:
+		if r.checkIfTTLSecondsAfterFinishedIsCompleted(&scan) {
+			err = r.deleteScan(&scan)
+		}
+	case executionv1.ScanStateReadAndWriteHookProcessing:
 		fallthrough
-	case "ReadAndWriteHookCompleted":
+	case executionv1.ScanStateReadAndWriteHookCompleted:
 		fallthrough
-	case "ReadOnlyHookProcessing":
+	case executionv1.ScanStateReadOnlyHookProcessing:
 		err = r.migrateHookStatus(&scan)
+	}
+
+	if scan.Spec.TTLSecondsAfterFinished != nil && (scan.Status.State == executionv1.ScanStateDone || scan.Status.State == executionv1.ScanStateErrored) {
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: time.Duration(*scan.Spec.TTLSecondsAfterFinished) * time.Second,
+		}, err
 	}
 	if err != nil {
 		return ctrl.Result{}, err
@@ -127,11 +143,15 @@ func (r *ScanReconciler) handleFinalizer(scan *executionv1.Scan) error {
 	if containsString(scan.ObjectMeta.Finalizers, s3StorageFinalizer) {
 		bucketName := os.Getenv("S3_BUCKET")
 		r.Log.V(3).Info("Deleting External Files from FileStorage", "ScanUID", scan.UID)
-		err := r.MinioClient.RemoveObject(context.Background(), bucketName, fmt.Sprintf("scan-%s/%s", scan.UID, scan.Status.RawResultFile), minio.RemoveObjectOptions{})
+
+		rawResultUrl := getPresignedUrlPath(*scan, scan.Status.RawResultFile)
+		err := r.MinioClient.RemoveObject(context.Background(), bucketName, rawResultUrl, minio.RemoveObjectOptions{})
 		if err != nil && err.Error() != errNotFound {
 			return err
 		}
-		err = r.MinioClient.RemoveObject(context.Background(), bucketName, fmt.Sprintf("scan-%s/findings.json", scan.UID), minio.RemoveObjectOptions{})
+
+		findingsJsonUrl := getPresignedUrlPath(*scan, "findings.json")
+		err = r.MinioClient.RemoveObject(context.Background(), bucketName, findingsJsonUrl, minio.RemoveObjectOptions{})
 
 		if err != nil && err.Error() != errNotFound {
 			return err
@@ -146,11 +166,12 @@ func (r *ScanReconciler) handleFinalizer(scan *executionv1.Scan) error {
 }
 
 // PresignedGetURL returns a presigned URL from the s3 (or compatible) serice.
-func (r *ScanReconciler) PresignedGetURL(scanID types.UID, filename string, duration time.Duration) (string, error) {
+func (r *ScanReconciler) PresignedGetURL(scan executionv1.Scan, filename string, duration time.Duration) (string, error) {
 	bucketName := os.Getenv("S3_BUCKET")
 
+	fileUrl := getPresignedUrlPath(scan, filename)
 	reqParams := make(url.Values)
-	rawResultDownloadURL, err := r.MinioClient.PresignedGetObject(context.Background(), bucketName, fmt.Sprintf("scan-%s/%s", string(scanID), filename), duration, reqParams)
+	rawResultDownloadURL, err := r.MinioClient.PresignedGetObject(context.Background(), bucketName, fileUrl, duration, reqParams)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned url from s3 or compatible storage provider")
 		return "", err
@@ -159,10 +180,11 @@ func (r *ScanReconciler) PresignedGetURL(scanID types.UID, filename string, dura
 }
 
 // PresignedPutURL returns a presigned URL from the s3 (or compatible) serice.
-func (r *ScanReconciler) PresignedPutURL(scanID types.UID, filename string, duration time.Duration) (string, error) {
+func (r *ScanReconciler) PresignedPutURL(scan executionv1.Scan, filename string, duration time.Duration) (string, error) {
 	bucketName := os.Getenv("S3_BUCKET")
+	fileUrl := getPresignedUrlPath(scan, filename)
 
-	rawResultDownloadURL, err := r.MinioClient.PresignedPutObject(context.Background(), bucketName, fmt.Sprintf("scan-%s/%s", string(scanID), filename), duration)
+	rawResultDownloadURL, err := r.MinioClient.PresignedPutObject(context.Background(), bucketName, fileUrl, duration)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned url from s3 or compatible storage provider")
 		return "", err
@@ -171,10 +193,11 @@ func (r *ScanReconciler) PresignedPutURL(scanID types.UID, filename string, dura
 }
 
 // PresignedHeadURL returns a presigned URL from the s3 (or compatible) serice.
-func (r *ScanReconciler) PresignedHeadURL(scanID types.UID, filename string, duration time.Duration) (string, error) {
+func (r *ScanReconciler) PresignedHeadURL(scan executionv1.Scan, filename string, duration time.Duration) (string, error) {
 	bucketName := os.Getenv("S3_BUCKET")
+	fileUrl := getPresignedUrlPath(scan, filename)
 
-	rawResultHeadURL, err := r.MinioClient.PresignedHeadObject(context.Background(), bucketName, fmt.Sprintf("scan-%s/%s", string(scanID), filename), duration, nil)
+	rawResultHeadURL, err := r.MinioClient.PresignedHeadObject(context.Background(), bucketName, fileUrl, duration, nil)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned url from s3 or compatible storage provider")
 		return "", err
@@ -218,6 +241,42 @@ func (r *ScanReconciler) initS3Connection() *minio.Client {
 	}
 
 	return minioClient
+}
+
+func updateScanStateMetrics(scan executionv1.Scan) {
+	if scan.Status.State == executionv1.ScanStateInit {
+		scansStartedMetric.With(prometheus.Labels{commonMetricLabelScanType: scan.Spec.ScanType}).Inc()
+	}
+	if scan.Status.State == executionv1.ScanStateErrored {
+		scansErroredMetric.With(prometheus.Labels{commonMetricLabelScanType: scan.Spec.ScanType}).Inc()
+	}
+	if scan.Status.State == executionv1.ScanStateDone {
+		scansDoneMetric.With(prometheus.Labels{commonMetricLabelScanType: scan.Spec.ScanType}).Inc()
+	}
+}
+
+func (r *ScanReconciler) updateScanStatus(ctx context.Context, scan *executionv1.Scan) error {
+	updateScanStateMetrics(*scan)
+	if scan.Status.State == executionv1.ScanStateDone || scan.Status.State == executionv1.ScanStateErrored {
+		if scan.Status.FinishedAt == nil {
+			scan.Status.FinishedAt = &metav1.Time{Time: time.Now()}
+		}
+	}
+
+	if err := r.Status().Update(ctx, scan); err != nil {
+		if apierrors.IsConflict(err) {
+			r.Log.V(4).Info(
+				"Conflict while updating Scan status",
+				"scan", scan.Name,
+				"namespace", scan.Namespace,
+			)
+		} else {
+			r.Log.Error(err, "unable to update Scan status")
+			return err
+		}
+
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller and initializes every thing it needs
@@ -269,4 +328,38 @@ func containsString(slice []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func getPresignedUrlPath(scan executionv1.Scan, filename string) string {
+	urlTemplate, ok := os.LookupEnv("S3_URL_TEMPLATE")
+	if !ok {
+		// use default when environment variable is not set
+		urlTemplate = "scan-{{ .Scan.UID }}/{{ .Filename }}"
+	}
+	return executeUrlTemplate(urlTemplate, scan, filename)
+}
+
+func executeUrlTemplate(urlTemplate string, scan executionv1.Scan, filename string) string {
+	type Template struct {
+		Scan     executionv1.Scan
+		Filename string
+	}
+
+	tmpl, err := template.New(urlTemplate).Parse(urlTemplate)
+	if err != nil {
+		panic(err)
+	} else {
+		var rawOutput bytes.Buffer
+		templateArgs := Template{
+			Scan:     scan,
+			Filename: filename,
+		}
+
+		err = tmpl.Execute(&rawOutput, templateArgs)
+		if err != nil {
+			panic(err)
+		}
+		output := rawOutput.String()
+		return output
+	}
 }

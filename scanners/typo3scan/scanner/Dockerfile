@@ -1,18 +1,18 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 # Base Image
-FROM python:3.9-alpine as base
-
+FROM python:3.9-alpine AS base
+ARG scannerVersion
 # Install git and Clone Repo 
 RUN apk add git \
-    && git clone https://github.com/whoot/Typo3Scan.git \
+    && git clone https://github.com/whoot/Typo3Scan.git --depth 1 --branch "$scannerVersion" \
     && cd Typo3Scan \
     && rm -r .git .github doc
 
 # Runtime Image
-FROM python:3.9-alpine as runtime
+FROM python:3.9-alpine AS runtime
 
 # Create typo3scan user/group and give access
 RUN addgroup --system --gid 1001 typo3scan && adduser typo3scan --system --uid 1001 --ingroup typo3scan

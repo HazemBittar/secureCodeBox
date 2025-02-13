@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -37,28 +37,54 @@ func (r *ScanReconciler) startParser(scan *executionv1.Scan) error {
 
 	parseType := scan.Status.RawResultType
 
-	// get the scan template for the scan
-	var parseDefinition executionv1.ParseDefinition
-	if err := r.Get(ctx, types.NamespacedName{Name: parseType, Namespace: scan.Namespace}, &parseDefinition); err != nil {
-		log.V(7).Info("Unable to fetch ParseDefinition")
+	// get the parse definition matching the parseType of the scan result
+	var parseDefinitionSpec executionv1.ParseDefinitionSpec
+	if scan.Spec.ResourceMode == nil || *scan.Spec.ResourceMode == executionv1.NamespaceLocal {
+		var parseDefinition executionv1.ParseDefinition
+		if err := r.Get(ctx, types.NamespacedName{Name: parseType, Namespace: scan.Namespace}, &parseDefinition); err != nil {
+			log.V(7).Info("Unable to fetch ParseDefinition")
 
-		scan.Status.State = "Errored"
-		scan.Status.ErrorDescription = fmt.Sprintf("No ParseDefinition for ResultType '%s' found in Scans Namespace.", parseType)
-		if err := r.Status().Update(ctx, scan); err != nil {
-			r.Log.Error(err, "unable to update Scan status")
-			return err
+			scan.Status.State = executionv1.ScanStateErrored
+			scan.Status.ErrorDescription = fmt.Sprintf("No ParseDefinition for ResultType '%s' found in Scans Namespace.", parseType)
+			if err := r.updateScanStatus(ctx, scan); err != nil {
+				r.Log.Error(err, "unable to update Scan status")
+				return err
+			}
+
+			return fmt.Errorf("no ParseDefinition of type '%s' found", parseType)
 		}
+		log.Info("Matching ParseDefinition Found", "ParseDefinition", parseType)
+		parseDefinitionSpec = parseDefinition.Spec
+	} else if *scan.Spec.ResourceMode == executionv1.ClusterWide {
+		var clusterParseDefinition executionv1.ClusterParseDefinition
+		if err := r.Get(ctx, types.NamespacedName{Name: parseType}, &clusterParseDefinition); err != nil {
+			log.V(7).Info("Unable to fetch ClusterParseDefinition")
 
-		return fmt.Errorf("No ParseDefinition of type '%s' found", parseType)
+			scan.Status.State = executionv1.ScanStateErrored
+			scan.Status.ErrorDescription = fmt.Sprintf("No ClusterParseDefinition for ResultType '%s' found.", parseType)
+			if err := r.updateScanStatus(ctx, scan); err != nil {
+				r.Log.Error(err, "unable to update Scan status")
+				return err
+			}
+
+			return fmt.Errorf("no ClusterParseDefinition of type '%s' found", parseType)
+		}
+		log.Info("Matching ClusterParseDefinition Found", "ClusterParseDefinition", parseType)
+		parseDefinitionSpec = clusterParseDefinition.Spec
 	}
-	log.Info("Matching ParseDefinition Found", "ParseDefinition", parseType)
 
-	findingsUploadURL, err := r.PresignedPutURL(scan.UID, "findings.json", defaultPresignDuration)
+	urlExpirationDuration, err := util.GetUrlExpirationDuration(util.ParserController)
+	if err != nil {
+		r.Log.Error(err, "Failed to parse parser url expiration")
+		panic(err)
+	}
+
+	findingsUploadURL, err := r.PresignedPutURL(*scan, "findings.json", urlExpirationDuration)
 	if err != nil {
 		r.Log.Error(err, "Could not get presigned url from s3 or compatible storage provider")
 		return err
 	}
-	rawResultDownloadURL, err := r.PresignedGetURL(scan.UID, scan.Status.RawResultFile, defaultPresignDuration)
+	rawResultDownloadURL, err := r.PresignedGetURL(*scan, scan.Status.RawResultFile, urlExpirationDuration)
 	if err != nil {
 		return err
 	}
@@ -73,6 +99,11 @@ func (r *ScanReconciler) startParser(scan *executionv1.Scan) error {
 			APIGroups: []string{"execution.securecodebox.io"},
 			Resources: []string{"scans/status"},
 			Verbs:     []string{"get", "patch"},
+		},
+		{
+			APIGroups: []string{"execution.securecodebox.io"},
+			Resources: []string{"parsedefinitions"},
+			Verbs:     []string{"get"},
 		},
 	}
 	r.ensureServiceAccountExists(
@@ -91,6 +122,21 @@ func (r *ScanReconciler) startParser(scan *executionv1.Scan) error {
 	var backOffLimit int32 = 3
 	truePointer := true
 	falsePointer := false
+
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("100Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("400m"),
+			corev1.ResourceMemory: resource.MustParse("200Mi"),
+		},
+	}
+	if len(parseDefinitionSpec.Resources.Requests) != 0 || len(parseDefinitionSpec.Resources.Limits) != 0 {
+		resources = parseDefinitionSpec.Resources
+	}
+
 	job := &batch.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations:  make(map[string]string),
@@ -99,23 +145,26 @@ func (r *ScanReconciler) startParser(scan *executionv1.Scan) error {
 			Labels:       labels,
 		},
 		Spec: batch.JobSpec{
-			TTLSecondsAfterFinished: parseDefinition.Spec.TTLSecondsAfterFinished,
+			TTLSecondsAfterFinished: parseDefinitionSpec.TTLSecondsAfterFinished,
 			BackoffLimit:            &backOffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app.kubernetes.io/managed-by": "securecodebox",
+					},
 					Annotations: map[string]string{
 						"auto-discovery.securecodebox.io/ignore": "true",
-						"sidecar.istio.io/inject":                "false",
+						"sidecar.istio.io/inject":                allowIstioSidecarInjectionInJobs,
 					},
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: "parser",
-					ImagePullSecrets:   parseDefinition.Spec.ImagePullSecrets,
+					ImagePullSecrets:   parseDefinitionSpec.ImagePullSecrets,
 					Containers: []corev1.Container{
 						{
 							Name:  "parser",
-							Image: parseDefinition.Spec.Image,
+							Image: parseDefinitionSpec.Image,
 							Env: []corev1.EnvVar{
 								{
 									Name: "NAMESPACE",
@@ -134,17 +183,8 @@ func (r *ScanReconciler) startParser(scan *executionv1.Scan) error {
 								rawResultDownloadURL,
 								findingsUploadURL,
 							},
-							ImagePullPolicy: parseDefinition.Spec.ImagePullPolicy,
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("200m"),
-									corev1.ResourceMemory: resource.MustParse("100Mi"),
-								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("400m"),
-									corev1.ResourceMemory: resource.MustParse("200Mi"),
-								},
-							},
+							ImagePullPolicy: parseDefinitionSpec.ImagePullPolicy,
+							Resources:       resources,
 							SecurityContext: &corev1.SecurityContext{
 								RunAsNonRoot:             &truePointer,
 								AllowPrivilegeEscalation: &falsePointer,
@@ -161,22 +201,40 @@ func (r *ScanReconciler) startParser(scan *executionv1.Scan) error {
 			},
 		},
 	}
+	job.Spec.Template.Labels = util.MergeStringMaps(job.Spec.Template.Labels, scan.ObjectMeta.DeepCopy().Labels)
 
 	// Merge Env from ParserTemplate
 	job.Spec.Template.Spec.Containers[0].Env = append(
 		job.Spec.Template.Spec.Containers[0].Env,
-		parseDefinition.Spec.Env...,
+		parseDefinitionSpec.Env...,
 	)
 	// Merge VolumeMounts from ParserTemplate
 	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
 		job.Spec.Template.Spec.Containers[0].VolumeMounts,
-		parseDefinition.Spec.VolumeMounts...,
+		parseDefinitionSpec.VolumeMounts...,
 	)
 	// Merge Volumes from ParserTemplate
 	job.Spec.Template.Spec.Volumes = append(
 		job.Spec.Template.Spec.Volumes,
-		parseDefinition.Spec.Volumes...,
+		parseDefinitionSpec.Volumes...,
 	)
+
+	// Merge NodeSelectors from ParseDefinition & Scan into Parse Job
+	job.Spec.Template.Spec.NodeSelector = util.MergeStringMaps(job.Spec.Template.Spec.NodeSelector, parseDefinitionSpec.NodeSelector, scan.Spec.NodeSelector)
+
+	// Set affinity based on scan, if defined, or parseDefinition if not overridden by scan
+	if scan.Spec.Affinity != nil {
+		job.Spec.Template.Spec.Affinity = scan.Spec.Affinity
+	} else {
+		job.Spec.Template.Spec.Affinity = parseDefinitionSpec.Affinity
+	}
+
+	// Set tolerations, either from parseDefinition or from scan
+	if scan.Spec.Tolerations != nil {
+		job.Spec.Template.Spec.Tolerations = scan.Spec.Tolerations
+	} else {
+		job.Spec.Template.Spec.Tolerations = parseDefinitionSpec.Tolerations
+	}
 
 	r.Log.V(8).Info("Configuring customCACerts for Parser")
 	injectCustomCACertsIfConfigured(job)
@@ -192,8 +250,8 @@ func (r *ScanReconciler) startParser(scan *executionv1.Scan) error {
 		return err
 	}
 
-	scan.Status.State = "Parsing"
-	if err := r.Status().Update(ctx, scan); err != nil {
+	scan.Status.State = executionv1.ScanStateParsing
+	if err := r.updateScanStatus(ctx, scan); err != nil {
 		log.Error(err, "unable to update Scan status")
 		return err
 	}
@@ -213,15 +271,15 @@ func (r *ScanReconciler) checkIfParsingIsCompleted(scan *executionv1.Scan) error
 	switch status {
 	case completed:
 		r.Log.V(7).Info("Parsing is completed")
-		scan.Status.State = "ParseCompleted"
-		if err := r.Status().Update(ctx, scan); err != nil {
+		scan.Status.State = executionv1.ScanStateParseCompleted
+		if err := r.updateScanStatus(ctx, scan); err != nil {
 			r.Log.Error(err, "unable to update Scan status")
 			return err
 		}
 	case failed:
-		scan.Status.State = "Errored"
+		scan.Status.State = executionv1.ScanStateErrored
 		scan.Status.ErrorDescription = "Failed to run the Parser. This is likely a Bug, we would like to know about. Please open up a Issue on GitHub."
-		if err := r.Status().Update(ctx, scan); err != nil {
+		if err := r.updateScanStatus(ctx, scan); err != nil {
 			r.Log.Error(err, "unable to update Scan status")
 			return err
 		}

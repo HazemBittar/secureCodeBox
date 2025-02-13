@@ -7,7 +7,7 @@ usecase: "Publishes Scan Summary to MS Teams, Slack and others."
 ---
 
 <!--
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 -->
@@ -26,10 +26,10 @@ Otherwise your changes will be reverted/overwritten automatically due to the bui
 <p align="center">
   <a href="https://opensource.org/licenses/Apache-2.0"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"/></a>
   <a href="https://github.com/secureCodeBox/secureCodeBox/releases/latest"><img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/secureCodeBox/secureCodeBox?sort=semver"/></a>
-  <a href="https://owasp.org/www-project-securecodebox/"><img alt="OWASP Incubator Project" src="https://img.shields.io/badge/OWASP-Incubator%20Project-365EAA"/></a>
+  <a href="https://owasp.org/www-project-securecodebox/"><img alt="OWASP Lab Project" src="https://img.shields.io/badge/OWASP-Lab%20Project-yellow"/></a>
   <a href="https://artifacthub.io/packages/search?repo=securecodebox"><img alt="Artifact HUB" src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/securecodebox"/></a>
   <a href="https://github.com/secureCodeBox/secureCodeBox/"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/secureCodeBox/secureCodeBox?logo=GitHub"/></a>
-  <a href="https://twitter.com/securecodebox"><img alt="Twitter Follower" src="https://img.shields.io/twitter/follow/securecodebox?style=flat&color=blue&logo=twitter"/></a>
+  <a href="https://infosec.exchange/@secureCodeBox"><img alt="Mastodon Follower" src="https://img.shields.io/mastodon/follow/111902499714281911?domain=https%3A%2F%2Finfosec.exchange%2F"/></a>
 </p>
 
 ## What is "Notification" Hook about?
@@ -42,7 +42,7 @@ The notification chart can be deployed via helm:
 
 ```bash
 # Install HelmChart (use -n to configure another namespace)
-helm upgrade --install notification secureCodeBox/notification
+helm upgrade --install notification oci://ghcr.io/securecodebox/helm/notification
 ```
 
 ## Requirements
@@ -54,18 +54,19 @@ Kubernetes: `>=v1.11.0-0`
 Installing the Notification hook will add a ReadOnly Hook to your namespace.
 
 ```bash
-helm upgrade --install nwh ./hooks/notification-hook/ --values /path/to/your/values"
+helm upgrade --install notification ./hooks/notification/ --values /path/to/your/values"
 ```
 
 The `values.yaml` you need depends on the notification type you want to use.
-Please take a look at the documentation for each type (e.g. for slack see [Configuration of a Slack Notification](#configuration-o-a-slack-notification))
+Please take a look at the documentation for each type (e.g. for slack see [Configuration of a Slack Notification](#configuration-of-a-slack-notification-webhook))
 
 ### Available Notifier
 
-- [Slack](#configuration-of-a-slack-notification)
+- [Slack](#configuration-of-a-slack-notification-webhook)
 - [Slack App](#configuration-of-a-slack-app-notification)
 - [Email](#configuration-of-an-email-notification)
 - [MS Teams](#configuration-of-a-ms-teams-notification)
+- [Trello](#configuration-of-a-trello-notification)
 
 ### Configuration of a Notification
 
@@ -86,8 +87,8 @@ notificationChannels:
 env:
   - name: SOME_ENV
     valueFrom:
-      secretRefKey:
-        secret: some-secret
+      secretKeyRef:
+        name: some-secret
         key: some-key
 ```
 
@@ -124,7 +125,7 @@ This means that you can define key-value pairs as well as providing envs via sec
 #### Rule Configuration
 
 The rules can be defined in the values of the Chart.
-The syntax and semantic for these rules are quite similar to CascadingRules (See: [secureCodeBox | CascadingRules](/docs/api/crds/cascading-rule))
+The syntax and semantic for these rules are quite similar to CascadingRules (See: [secureCodeBox | CascadingRules](https://www.securecodebox.io/docs/api/crds/cascading-rule))
 To define Rules you will have to provide the `rules` field with one or more `matches` elements.
 Each `matches` defines one Rule.
 For example:
@@ -177,8 +178,8 @@ env:
     - name: POINTER_TO_ENV
       valueFrom:
         secretKeyRef:
-            name: myslacksecret
-            key: SLACK_WEB_HOOK
+          name: myslacksecret
+          key: SLACK_WEB_HOOK
 
 # cat values_slack_secrets.yaml
 apiVersion: v1
@@ -190,7 +191,7 @@ data:
     SLACK_WEB_HOOK: NOIDONTHINKSOBASE64STUFF
 
 kubectl apply -f values_slack_secrets.yaml
-helm upgrade --install nwh secureCodeBox/notification-hook --values myvalues.yaml
+helm upgrade --install nwh oci://ghcr.io/securecodebox/helm/notification-hook --values myvalues.yaml
 ```
 
 #### Configuration of a Slack App Notification
@@ -228,7 +229,7 @@ env:
 ##### Supported Notification Channels
 
 The `slack-app` notifier supports the same message templates as the `slack` notifier.
-See [slack](#configuration-of-a-slack-notification) for the supported message types.
+See [slack](#configuration-of-a-slack-notification-webhook) for the supported message types.
 
 ##### Scan / Channel Config
 
@@ -268,10 +269,14 @@ notificationChannels:
     type: email
     template: email
     rules: []
-    endPoint: "someone@somewhere.xyz"
+    endPoint: "someone@example.com"
 env:
   - name: SMTP_CONFIG
-    value: "smtp://user:pass@smtp.domain.tld/"
+    # you can create the secret via: kubectl create secret generic email-credentials --from-literal="smtp-config=smtp://user:pass@smtp.domain.tld/"
+    valueFrom:
+      secretKeyRef:
+        name: email-credentials
+        key: smtp-config
 ```
 
 To provide a custom `from` field for your email you can specify `EMAIL_FROM` under env.
@@ -280,9 +285,27 @@ For example:
 ```
 env:
   - name: SMTP_CONFIG
-    value: "smtp://user:pass@smtp.domain.tld/"
+    valueFrom:
+      secretKeyRef:
+        name: email-credentials
+        key: smtp-config
   - name: EMAIL_FROM
     value: secureCodeBox
+```
+
+You can overwrite the default email recipient of the notification mail for every scan by setting a `notification.securecodebox.io/email-recipient` annotation on the scan to another email address:
+
+```yaml
+apiVersion: "execution.securecodebox.io/v1"
+kind: Scan
+metadata:
+  name: "nmap-juice-shop"
+  annotations:
+    notification.securecodebox.io/email-recipient: "foo@example.com"
+spec:
+  scanType: "nmap"
+  parameters:
+    - juice-shop.default.svc
 ```
 
 #### Configuration Of A MS Teams Notification
@@ -306,7 +329,7 @@ notificationChannels:
     type: ms-teams
     template: msteams-messageCard
     rules: []
-    endPoint: "https://somewhere.xyz/sadf12"
+    endPoint: "https://example/sadf12"
 env:
   - name: VULNMANAG_ENABLED
     value: true
@@ -314,6 +337,117 @@ env:
     value: "somedashboard.url"
   - name: VULNMANAG_DASHBOARD_FINDINGS_URL
     value: "somedashboard.url/findings/{{ uid }}"
+```
+
+#### Configuration of a Trello Notification
+
+A Trello notification is used to create Trello cards for each finding that matches the defined rules. This allows integrating SecureCodeBox into your development workflow. Each finding will be created as a card with the following information:
+
+```
+Card Name: <severity>: <name>
+Card Body: <location> <category> <description> <attributes>
+```
+
+##### Requirements
+
+- Please read the [Trello API documentation](https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/) for a description on how to setup your Trello key and token.
+- Identify your target card list where the new cards will be created and get the list ID. To find the card list and label ids use the Trello JSON hack as described here https://stackoverflow.com/questions/26552278/trello-api-getting-boards-lists-cards-information
+- Read the [Trello Cards API](https://developer.atlassian.com/cloud/trello/rest/api-group-cards) for more information on the card creation options.
+
+##### Configuration
+
+To configure a Trello notification set the `type` to `trello` and the `endPoint` to point to your env containing the Trello cards API endpoint. You also need to define the following env vars (if an env var is not defined it will take the default value, if required and not set the notification won't be sent):
+
+- TRELLO_CARDS_ENDPOINT: The Trello cards API endpoint. Default: https://api.trello.com/1/cards.
+- TRELLO_KEY: Your Trello API key. Read the requirements above. Required.
+- TRELLO_TOKEN: Your Trello API token. Read the requirements above. Required.
+- TRELLO_LIST: Trello unique Id of the list where the cards will be placed. Required.
+- TRELLO_LABELS: Comma separated list of Trello label IDs to apply to the card. If empty no labels will be applied. Default: ""
+- TRELLO_POS: The position of the card in the list as defined by the Trello cards API. Options: top, bottom, or a positive float. Default: top.
+- TRELLO_TITLE_PREFIX: An optional  arbitrary text to add to the title of the card. Default "".
+
+##### Example Config
+
+The below example shows how to create a helm values chart and load secrets for access.
+You must have `endPoint` point to a [defined environment variable](https://github.com/secureCodeBox/secureCodeBox/blob/main/hooks/notification/hook/hook.ts#L20), not a string.
+
+```yaml
+# cat trello_values.yaml
+notificationChannels:
+  - name: nmapopenports
+    type: trello
+    skipNotificationOnZeroFinding: true
+    rules:
+      - matches:
+          anyOf:
+            - category: "Open Port"
+    endPoint: TRELLO_CARDS_ENDPOINT
+env:
+    - name: TRELLO_CARDS_ENDPOINT
+      value: https://api.trello.com/1/cards
+    - name: TRELLO_KEY
+      valueFrom:
+        secretKeyRef:
+          name: trello
+          key: key
+    - name: TRELLO_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: trello
+          key: token
+    - name: TRELLO_LIST
+      value: 123a456b789c013d
+    - name: TRELLO_LABELS
+      value: "111a111b222c333f,555a666b777c888d"
+    - name: TRELLO_POS
+      value: top
+    - name: TRELLO_TITLE_PREFIX
+      value: "Alert! "
+---
+# cat trello_secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+    name: trello
+type: Opaque
+stringData:
+    key: YOURSECRETTRELLOAPIKEY
+    token: YOURSECRETTRELLOAPITOKEN
+kubectl apply -f trello_secrets.yaml
+helm upgrade --install nwh oci://ghcr.io/securecodebox/helm/notification-hook --values trello_values.yaml
+```
+
+#### Configuration Of A rocket.chat Notification
+
+To configure a [rocket.chat](https://rocket.chat/) notification you need to set the type to `rocket-chat`.
+In `endPoint` you need to specify url to your rocket.chat instances `post.message` endpoint. E.g. `https://rocketchat.example.com/api/v1/chat.postMessage`
+To use the template provided by the secureCodeBox set template to `rocket-chat`.
+The rocket.chat notifier requires a rocket chat api token to work correctly, see example below on how this is configured.
+
+You can configure the channel the hook sends the message to by setting the `notification.securecodebox.io/rocket-chat-channel=#my-channel` on the scan.
+If the channel is not set the hook wil send the notification to the default channel configured, see config example below.
+
+A basic configuration could look like this:
+
+```yaml
+notificationChannels:
+  - name: rocket-chat
+    type: rocket-chat
+    template: rocket-chat
+    rules: []
+    endPoint: "https://rocketchat.example.com/api/v1/chat.postMessage"
+env:
+  - name: ROCKET_CHAT_AUTH_TOKEN
+    # you can create the secret via: kubectl create secret generic rocket-chat --from-literal="token=token-goes-here"
+    valueFrom:
+      secretKeyRef:
+        name: rocket-chat
+        key: token
+  - name: ROCKET_CHAT_USER_ID
+    value: "XcNTAqEhyBD14aqcZ"
+  - name: ROCKET_CHAT_DEFAULT_CHANNEL
+    # channel used to send in notifications if no channel is set for the individual scan.
+    value: "#securecodebox"
 ```
 
 ### Custom Message Templates
@@ -325,11 +459,11 @@ Templates for this hook are written using the [Nunjucks](https://mozilla.github.
 
 To fill your template with data we provide the following objects.
 
-| object   | Details                                                                                    |
-| -------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| findings | An array of the findings matching your rules (See [Finding                                 | secureCodeBox](https://docs.securecodebox.io/docs/api/finding)                                                                          |
-| scan     | An Object containing information about the scan that triggered the notification (See [Scan | secureCodeBox](https://docs.securecodebox.io/docs/api/crds/scan)                                                                        |
-| args     | contains `process.env` (See: [process.env                                                  | nodejs](https://nodejs.org/api/process.html#process_process_env)) you can use this to access data defined in `env` of the `values.yaml` |
+| object   | Details                                                                                                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| findings | An array of the findings matching your rules (See [Finding secureCodeBox API Specification](https://www.securecodebox.io/docs/api/finding)                                       |
+| scan     | An Object containing information about the scan that triggered the notification (See [Scan secureCodeBox API Specification](https://www.securecodebox.io/docs/api/crds/scan)     |
+| args     | contains `process.env` (See: [process.env nodejs](https://nodejs.org/api/process.html#process_process_env)) you can use this to access data defined in `env` of the `values.yaml` |
 
 ## Values
 
@@ -343,12 +477,19 @@ To fill your template with data we provide the following objects.
 | env[1].name | string | `"SMTP_CONFIG"` |  |
 | env[1].valueFrom.secretKeyRef.key | string | `"smtp-config-key"` |  |
 | env[1].valueFrom.secretKeyRef.name | string | `"some-secret"` |  |
+| hook.affinity | object | `{}` | Optional affinity settings that control how the hook job is scheduled (see: https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/) |
+| hook.env | list | `[]` | Optional environment variables mapped into the hook (see: https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/) |
+| hook.extraVolumeMounts | list | `[]` | Optional VolumeMounts mapped into the hook (see: https://kubernetes.io/docs/concepts/storage/volumes/) |
+| hook.extraVolumes | list | `[]` | Optional Volumes mapped into the hook (see: https://kubernetes.io/docs/concepts/storage/volumes/) |
 | hook.image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. One of Always, Never, IfNotPresent. Defaults to Always if :latest tag is specified, or IfNotPresent otherwise. More info: https://kubernetes.io/docs/concepts/containers/images#updating-images |
 | hook.image.repository | string | `"docker.io/securecodebox/hook-notification"` | Hook image repository |
 | hook.image.tag | string | defaults to the charts version | Image tag |
 | hook.labels | object | `{}` | Add Kubernetes Labels to the hook definition |
 | hook.priority | int | `0` | Hook priority. Higher priority Hooks are guaranteed to execute before low priority Hooks. |
-| hook.ttlSecondsAfterFinished | string | `nil` | seconds after which the kubernetes job for the hook will be deleted. Requires the Kubernetes TTLAfterFinished controller: https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/ |
+| hook.resources | object | `{ requests: { cpu: "200m", memory: "100Mi" }, limits: { cpu: "400m", memory: "200Mi" } }` | Optional resources lets you control resource limits and requests for the hook container. See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/ |
+| hook.tolerations | list | `[]` | Optional tolerations settings that control how the hook job is scheduled (see: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) |
+| hook.ttlSecondsAfterFinished | string | `nil` | seconds after which the Kubernetes job for the hook will be deleted. Requires the Kubernetes TTLAfterFinished controller: https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/ |
+| imagePullSecrets | list | `[]` | Define imagePullSecrets when a private registry is used (see: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/) |
 | notificationChannels[0].endPoint | string | `"SOME_ENV_KEY"` |  |
 | notificationChannels[0].name | string | `"slack"` |  |
 | notificationChannels[0].rules[0].matches.anyOf[0].category | string | `"Open Port"` |  |
@@ -360,11 +501,11 @@ To fill your template with data we provide the following objects.
 
 Code of secureCodeBox is licensed under the [Apache License 2.0][scb-license].
 
-[scb-owasp]: https://www.owasp.org/index.php/OWASP_secureCodeBox
-[scb-docs]: https://docs.securecodebox.io/
-[scb-site]: https://www.securecodebox.io/
-[scb-github]: https://github.com/secureCodeBox/
-[scb-twitter]: https://twitter.com/secureCodeBox
-[scb-slack]: https://join.slack.com/t/securecodebox/shared_invite/enQtNDU3MTUyOTM0NTMwLTBjOWRjNjVkNGEyMjQ0ZGMyNDdlYTQxYWQ4MzNiNGY3MDMxNThkZjJmMzY2NDRhMTk3ZWM3OWFkYmY1YzUxNTU
-[scb-license]: https://github.com/secureCodeBox/secureCodeBox/blob/master/LICENSE
+[scb-owasp]:    https://www.owasp.org/index.php/OWASP_secureCodeBox
+[scb-docs]:     https://www.securecodebox.io/
+[scb-site]:     https://www.securecodebox.io/
+[scb-github]:   https://github.com/secureCodeBox/
+[scb-mastodon]: https://infosec.exchange/@secureCodeBox
+[scb-slack]:    https://owasp.org/slack/invite
+[scb-license]:  https://github.com/secureCodeBox/secureCodeBox/blob/master/LICENSE
 

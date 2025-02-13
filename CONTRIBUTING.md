@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 -->
@@ -15,6 +15,11 @@ SPDX-License-Identifier: Apache-2.0
   - [How to Write Commit Messages](#how-to-write-commit-messages)
   - [Code of Conduct](#code-of-conduct)
   - [Developer Certificate of Origin and Licensing](#developer-certificate-of-origin-and-licensing)
+  - [Verified commits](#verified-commits)
+
+For general information about the acceptance criteria for a community contribution, 
+please make sure to visit our [doc page](https://www.securecodebox.io/docs/contributing/contribution-criteria) 
+before you start your very much appreciated work!
 
 ## GitHub Flow
 
@@ -45,28 +50,21 @@ TL;DR
 5. merge only after pull request review
 6. deploy immediately after review
 
-**_Please make sure to sign all your commits (See: [git-scm](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work))._**
-
 ## Working with Forks and Pull Requests
-
-**_Please make sure to sign all your commits (See: [git-scm](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work))._**
 
 If you want to contribute you will need to fork the project.
 To enable the use of our CI Pipeline you will need to add these GitHub secrets:
 
-| Secret           | Usage |
-|------------------|--------|
+| Secret           | Usage                                                                                                                                       |
+|------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
 | DOCKER_NAMESPACE | This is the namespace for the docker images. For the main repository this is *securecodebox*. On you fork this is probably your Docker user |
-| DOCKER_USERNAME  | This is the username that is used to push the Docker images |
-| DOCKER_TOKEN     | This is the Token that enables the CI to push |
-| CC_TEST_REPORTER_ID | Your Codeclimate ID (optional) |
+| DOCKER_USERNAME  | This is the username that is used to push the Docker images                                                                                 |
+| DOCKER_TOKEN     | This is the Token that enables the CI to push                                                                                               |
 
 If you want early feedback feel free to open a *Draft Pull Request*.
 When you are done, you can convert it to a standard *Pull Request* (or create one if you did not create a *Draft Pull Request*).
 
 Generally the _secureCodeBox_ project follows the standard [GitHub Pull request process](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests).
-
-**_Please make sure to sign all your commits (See: [git-scm](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work))._**
 
 ## Bugfixing and Security Fixing Released Features
 
@@ -93,13 +91,14 @@ For more information see [Chris Beams article](https://chris.beams.io/posts/git-
 
 TL;DR
 
-1. Separate subject from body with a blank line
-2. Limit the subject line to 50 characters
-3. Capitalize the subject line
-4. Do not end the subject line with a period
-5. Use the imperative mood in the subject line
-6. Wrap the body at 72 characters
-7. Use the body to explain what and why vs. how
+1. Separate subject from body with a blank line.
+2. Add the issue number at beginning of to the subject line (e.g. "#42 Add the Answer to the Live, Universe, and the Rest")
+3. Limit the subject line to 50 characters.
+4. Capitalize the subject line.
+5. Do not end the subject line with a period.
+6. Use the imperative mood in the subject line.
+7. Wrap the body at 72 characters.
+8. Use the body to explain what and why (not how because this is obvious from the diff).
 
 **NOTE**: Make sure you don't include `@mentions` or `fixes` keywords in your git commit messages. These should be included in the PR body instead.
 
@@ -115,7 +114,14 @@ We decided to use [DCO](https://en.wikipedia.org/wiki/Developer_Certificate_of_O
 
 1. Read carefully our [contributors file][contributors-file].
 2. Open a pull request which adds you to the [contributors file][contributors-file] to agree the DCO.
-3. Always add a signed-of tag to all your commits as described in the [contributors file][contributors-file].
+3. Always add a signed-off tag to all your commits as described in the [contributors file][contributors-file].
 4. Add a SPDX license header to all files your contribution will create. You can use the [reuse tool](https://reuse.software) with our [helper script](./bin/add-license-header.sh).
 
 [contributors-file]: ./CONTRIBUTORS.md
+
+## Verified commits
+
+It is also a good idea to always cryptographically sign all of your commits 
+(See: [git-scm](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work)).
+You can check if your commits were successfully signed by looking for the `Verified` tag on your commits on GitHub.
+This is optional for community contributions, but strongly encouraged.

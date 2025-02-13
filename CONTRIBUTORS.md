@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 -->
@@ -34,3 +34,27 @@ Committing with `git commit -s` will add the sign-off at the end of the commit m
 - Max Maass <max.maass@iteratec.com>
 - Chuck McAuley <nobletrout@gmail.com>
 - Ilyes Ben Dlala <ilyes.bendlala@iteratec.com>
+- Simon Hülkenberg <simon.huelkenberg@iteratec.com>
+- Johanna Walker <johanna.walker@iteratec.com>
+- Felix Belz <felix.belz@iteratec.com>
+- Mateusz Majcher <m.majcher91@gmail.com>
+- Guillermo Rodriguez <guimo.spritekin@gmail.com>
+- Lyuben Dimitrov <ldimitrov070@gmail.com>
+- Felix Hörsting <felix.hoersting@iteratec.com>
+- Matthew Cascio <cascio@cybercapsicum.com>
+- Patryk Miłek <patrykmilek96@gmail.com>
+- Renato Burton <renatoburton96@gmail.com>
+- Samreet Singh <samreet.singh@iteratec.com>
+- Silvia Milde <silvia.milde@iteratec.com>
+- Sofia Lohr <sofia.lohr@iteratec.com>
+- Vanessa Hermann <vanessa.hermann@iteratec.com>
+- Lukas Fischer <lukas.fischer@iteratec.com>
+- Heiko Kiesel <heiko.kiesel@iteratec.com>
+- Frank Belter <frank.belter@iteratec.com>
+- Maximilian Dorner <maximilian.dorner@clever-soft.com>
+- Boris Shek <boris.shek@iteratec.com>
+- Kamiren Dawkins <kamiren@dawkins.dev>
+- Tobias Stenby Brixen <kind.job1347@fastmail.com>
+- Eline Henriksen <mains.moon.0x@icloud.com>
+- Michael Kruggel <michael.kruggel@defenseunicorns.com>
+- Ochi Daiki <lbfdeatq@gmail.com>

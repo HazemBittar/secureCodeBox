@@ -1,15 +1,22 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
 import { NotifierType } from "../NotifierType";
 import { AbstractNotifier } from "./AbstractNotifier";
-import { createTransport } from "nodemailer"
+import { createTransport } from "nodemailer";
 
 export class EMailNotifier extends AbstractNotifier {
-  public static readonly SMTP_CONFIG = 'SMTP_CONFIG';
-  public static readonly EMAIL_FROM = 'EMAIL_FROM';
+  public static readonly SMTP_CONFIG = "SMTP_CONFIG";
+  public static readonly EMAIL_FROM = "EMAIL_FROM";
   protected type: NotifierType.EMAIL;
+
+  /**
+   * Emails endPoints are not considered sensitive as they are just the receiver of the email.
+   */
+  public resolveEndPoint(): string {
+    return this.channel.endPoint;
+  }
 
   public async sendMessage(): Promise<void> {
     const message = this.prepareMessage();
@@ -27,7 +34,7 @@ export class EMailNotifier extends AbstractNotifier {
       const info = await transporter.sendMail(message);
       console.log(info);
     } catch (e) {
-      console.log(`There was an error sending the email: ${e}`)
+      console.log(`There was an error sending the email: ${e}`);
     } finally {
       transporter.close();
     }
@@ -35,7 +42,10 @@ export class EMailNotifier extends AbstractNotifier {
 
   private prepareMessage(): any {
     const message = JSON.parse(this.renderMessage());
-    message.to = this.channel.endPoint;
+    if (!message.to) {
+      // only use fixed endpoint / mail address if it isn't already defined by the template
+      message.to = this.resolveEndPoint();
+    }
     message.from = this.args[EMailNotifier.EMAIL_FROM];
     return message;
   }

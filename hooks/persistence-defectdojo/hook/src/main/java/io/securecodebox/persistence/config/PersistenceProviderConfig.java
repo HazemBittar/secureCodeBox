@@ -1,12 +1,14 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
 package io.securecodebox.persistence.config;
 
+import io.securecodebox.persistence.exceptions.DefectDojoPersistenceException;
 import lombok.Getter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.NonNull;
+import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.ZoneId;
 import java.util.List;
@@ -15,48 +17,93 @@ import java.util.List;
  * Reads the configured Up / Download Urls for RawResults and Findings from the command line args and determines if
  * the Hook is run in ReadOnly or ReadAndWrite mode based on the number of args.
  */
-public class PersistenceProviderConfig {
-  private static final Logger LOG = LoggerFactory.getLogger(PersistenceProviderConfig.class);
+@Slf4j
+@ToString
+public final class PersistenceProviderConfig {
+  private static final int RAW_RESULT_DOWNLOAD_ARG_POSITION = 0;
+  private static final int FINDING_DOWNLOAD_ARG_POSITION = 1;
+  private static final int RAW_RESULT_UPLOAD_ARG_POSITION = 2;
+  private static final int FINDING_UPLOAD_ARG_POSITION = 3;
+  public static final int NUMBER_OF_ARGS_READONLY = 2;
+  public static final int NUMBER_OF_ARGS_READWRITE = 4;
 
-  final int RAW_RESULT_DOWNLOAD_ARG_POSITION = 0;
-  final int FINDING_DOWNLOAD_ARG_POSITION = 1;
-
-  final int RAW_RESULT_UPLOAD_ARG_POSITION = 2;
-  final int FINDING_UPLOAD_ARG_POSITION = 3;
-
-  // DefectDojo does in contrast to secureCodeBox not pay attention to time zones
-  // to guarantee consistent results when converting back and forth  a time zone
-  // has to be assumed for DefectDojo. It defaults to the Time Zone of the system clock
+  private final EnvConfig env = new EnvConfig();
+  /**
+   * Assumed time zone of DefectDojo
+   * <p>
+   * DefectDojo does in contrast to secureCodeBox not pay attention to time zones
+   * to guarantee consistent results when converting back and forth  a time zone
+   * has to be assumed for DefectDojo. It defaults to the Time Zone of the system clock.
+   * </p>
+   */
   @Getter
-  ZoneId defectDojoTimezoneId = ZoneId.systemDefault();
+  final ZoneId defectDojoTimezoneId = ZoneId.systemDefault();
+  @Getter
+  final boolean readOnly;
 
-  // Download Urls
+  /**
+   * URL where to download the raw result file
+   */
   @Getter
   final String rawResultDownloadUrl;
+  /**
+   * URL where to download the parsed finding file
+   */
   @Getter
   final String findingDownloadUrl;
-
-  // Upload Urls
+  /**
+   * URL where to upload the raw result file, maybe {@code null}
+   */
   final String rawResultUploadUrl;
+  /**
+   * URL where to upload the parsed finding file, maybe {@code null}
+   */
   final String findingUploadUrl;
 
-  public String getRawResultUploadUrl(){
-    if(isReadOnly()) {
-      throw new RuntimeException("Cannot Access RawResult Upload URL as the hook is run is ReadOnly mode.");
+  /**
+   * Provider configuration
+   *
+   * @param args not {@code null}, hook args passed via command line flags
+   */
+  public PersistenceProviderConfig(@NonNull final String[] args) {
+    if (args.length == NUMBER_OF_ARGS_READONLY) {
+      this.readOnly = true;
+      this.rawResultDownloadUrl = args[RAW_RESULT_DOWNLOAD_ARG_POSITION];
+      this.findingDownloadUrl = args[FINDING_DOWNLOAD_ARG_POSITION];
+      // Not set for ReadOnly hooks
+      this.rawResultUploadUrl = null;
+      this.findingUploadUrl = null;
+    } else if (args.length == NUMBER_OF_ARGS_READWRITE) {
+      this.readOnly = false;
+      this.rawResultDownloadUrl = args[RAW_RESULT_DOWNLOAD_ARG_POSITION];
+      this.findingDownloadUrl = args[FINDING_DOWNLOAD_ARG_POSITION];
+      this.rawResultUploadUrl = args[RAW_RESULT_UPLOAD_ARG_POSITION];
+      this.findingUploadUrl = args[FINDING_UPLOAD_ARG_POSITION];
+    } else {
+      final var msg = "Unexpected number of arguments given %d! Expected are either %d or %d arguments in array!";
+      throw new DefectDojoPersistenceException(
+        String.format(msg, args.length, NUMBER_OF_ARGS_READONLY, NUMBER_OF_ARGS_READWRITE));
+    }
+  }
+
+  /**
+   * Throws {@link DefectDojoPersistenceException} if {@link #isReadOnly()} is {@code true}
+   */
+  public String getRawResultUploadUrl() {
+    if (isReadOnly()) {
+      throw new DefectDojoPersistenceException("Cannot access the RawResult Upload URL because the hook is executed in ReadOnly mode!");
     }
     return rawResultUploadUrl;
   }
-  public String getFindingUploadUrl(){
-    if(isReadOnly()) {
-      throw new RuntimeException("Cannot Access Finding Upload URL as the hook is run is ReadOnly mode.");
+
+  /**
+   * Throws {@link DefectDojoPersistenceException} if {@link #isReadOnly()} is {@code true}
+   */
+  public String getFindingUploadUrl() {
+    if (isReadOnly()) {
+      throw new DefectDojoPersistenceException("Cannot access the Finding Upload URL because the hook is executed in ReadOnly mode!");
     }
     return findingUploadUrl;
-  }
-
-  final boolean readOnly;
-
-  public boolean isReadOnly() {
-    return readOnly;
   }
 
   public boolean isReadAndWrite() {
@@ -64,35 +111,7 @@ public class PersistenceProviderConfig {
   }
 
   public boolean isInLowPrivilegedMode() {
-    String LOW_PRIVILEGED_MODE = "DEFECTDOJO_LOW_PRIVILEGED_MODE";
-    if (System.getenv(LOW_PRIVILEGED_MODE) != null) {
-      return "true".equals(System.getenv(LOW_PRIVILEGED_MODE));
-    }
-    return false;
+    return env.lowPrivilegedMode();
   }
 
-  public PersistenceProviderConfig(String[] args) {
-    // Parse Hook Args passed via command line flags
-    if (args == null) {
-      throw new RuntimeException("Received `null` as command line flags. Expected exactly four (RawResult & Finding Up/Download Urls)");
-    } else if (args.length == 2) {
-      this.readOnly = true;
-
-      this.rawResultDownloadUrl = args[RAW_RESULT_DOWNLOAD_ARG_POSITION];
-      this.findingDownloadUrl = args[FINDING_DOWNLOAD_ARG_POSITION];
-      // Not set for ReadOnly hooks
-      this.rawResultUploadUrl = null;
-      this.findingUploadUrl = null;
-    } else if (args.length == 4) {
-      this.readOnly = false;
-
-      this.rawResultDownloadUrl = args[RAW_RESULT_DOWNLOAD_ARG_POSITION];
-      this.findingDownloadUrl = args[FINDING_DOWNLOAD_ARG_POSITION];
-      this.rawResultUploadUrl = args[RAW_RESULT_UPLOAD_ARG_POSITION];
-      this.findingUploadUrl = args[FINDING_UPLOAD_ARG_POSITION];
-    } else {
-      LOG.error("Received unexpected command line arguments: {}", List.of(args));
-      throw new RuntimeException("DefectDojo Hook received a unexpected number of command line flags. Expected exactly two (for ReadOnly Mode) or four (for ReadAndWrite mode)");
-    }
-  }
 }

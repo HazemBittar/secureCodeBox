@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 #
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -19,11 +19,9 @@ deploy-with-scanner:
 		--set="parser.image.tag=$(IMG_TAG)" \
 		--set="scanner.image.tag=$(IMG_TAG)" \
 		--set="parser.env[0].name=CRASH_ON_FAILED_VALIDATION" \
-		--set-string="parser.env[0].value=true"  \
-		--set="parser.env[1].name=PRODUCE_INVALID_FINDINGS" \
-		--set-string="parser.env[1].value=true"
+		--set-string="parser.env[0].value=true"
 
 integration-tests:
 	@echo ".: 🩺 Starting integration test in kind namespace 'integration-tests'."
 	kubectl -n integration-tests delete scans --all
-	cd ../../tests/integration/ && npm ci &&	npx --yes --package jest@$(JEST_VERSION) jest --verbose --ci --colors --coverage --passWithNoTests generic/findings-validation.test.js
+	cd $(PROJECT_DIR)/tests/integration/ && npm ci && npm run test:integration -- generic/findings-validation.test.js

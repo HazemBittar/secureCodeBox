@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,14 +8,14 @@
 #
 # Removes all available resources (scanners, demo-targets, hooks, operator) and namespaces
 #
-# For more information see https://docs.securecodebox.io/
+# For more information see https://www.securecodebox.io/
 
 set -eu
 shopt -s extglob
 
 # @see: http://wiki.bash-hackers.org/syntax/shellvars
-[ -z "${SCRIPT_DIRECTORY:-}" ] \
-  && SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+[ -z "${SCRIPT_DIRECTORY:-}" ] &&
+  SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 
 BASE_DIR=$(dirname "${SCRIPT_DIRECTORY}")
 

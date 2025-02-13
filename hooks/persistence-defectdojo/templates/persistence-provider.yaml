@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -21,19 +21,10 @@ spec:
   {{- end }}
   image: "{{ .Values.hook.image.repository }}:{{ .Values.hook.image.tag | default .Chart.Version }}"
   imagePullPolicy: "{{ .Values.hook.image.pullPolicy }}"
+  ttlSecondsAfterFinished: {{ .Values.hook.ttlSecondsAfterFinished }}
   env:
     - name: DEFECTDOJO_URL
       value: {{ .Values.defectdojo.url | quote }}
-    {{- if .Values.defectdojo.authentication.userId }}
-    - name: DEFECTDOJO_USER_ID
-      value: {{ .Values.defectdojo.authentication.userId | quote }}
-    {{- else }}
-    - name: DEFECTDOJO_USERNAME
-      valueFrom:
-        secretKeyRef:
-          name: {{ .Values.defectdojo.authentication.userSecret }}
-          key: {{ .Values.defectdojo.authentication.usernameKey }}
-    {{- end }}
     - name: DEFECTDOJO_APIKEY
       valueFrom:
         secretKeyRef:
@@ -41,3 +32,22 @@ spec:
           key: {{ .Values.defectdojo.authentication.apiKeyKey }}
     - name: DEFECTDOJO_LOW_PRIVILEGED_MODE
       value: {{ .Values.defectdojo.lowPrivilegedMode | quote }}
+    {{ if .Values.hook.env }}
+    {{- toYaml .Values.hook.env | nindent 4 }}
+    {{ end }}
+  affinity:
+    {{- toYaml .Values.hook.affinity | nindent 4 }}
+  tolerations:
+    {{- toYaml .Values.hook.tolerations | nindent 4 }}
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.hook.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  volumes:
+    {{- toYaml .Values.hook.extraVolumes | nindent 4 }}
+  volumeMounts:
+    {{- toYaml .Values.hook.extraVolumeMounts | nindent 4 }}

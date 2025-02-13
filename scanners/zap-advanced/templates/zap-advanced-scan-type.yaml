@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -31,9 +31,10 @@ metadata:
 spec:
   extractResults:
     type: zap-advanced-xml
-    location: "/home/securecodebox/results/zap-results.xml"
+    location: "/home/securecodebox/zap-results.xml"
   jobTemplate:
     spec:
+      suspend: {{ .Values.scanner.suspend | default false }}
       {{- if .Values.scanner.ttlSecondsAfterFinished }}
       ttlSecondsAfterFinished: {{ .Values.scanner.ttlSecondsAfterFinished }}
       {{- end }}
@@ -44,6 +45,16 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          affinity:
+            {{- toYaml .Values.scanner.affinity | nindent 12 }}
+          tolerations: 
+            {{- toYaml .Values.scanner.tolerations | nindent 12 }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.scanner.podSecurityContext | nindent 12 }}
           containers:
             - name: zap-advanced-scan
               image: "{{ .Values.scanner.image.repository }}:{{ .Values.scanner.image.tag | default .Chart.Version }}"
@@ -53,15 +64,13 @@ spec:
                 - "-m"
                 - "zapclient"
                 - "--report-type"
-                - "XML"
+                - {{ .Values.scanner.reportType | default "XML" }}
                 - "--zap-url"
                 - "localhost:8080"
-                # - "--api-key"
-                # - "ertzukndtzuikbvcfjkmnbvcfghjklmnbvc"
                 - "--config-folder"
                 - "/home/securecodebox/configs/"
                 - "--output-folder"
-                - "/home/securecodebox/results/"
+                - "/home/securecodebox/"
               resources:
                 {{- toYaml .Values.scanner.resources | nindent 16 }}
               securityContext:
@@ -89,15 +98,19 @@ spec:
                 - "database.recoverylog=false" # Tune ZAP, DB recovery is not needed here
                 - "-config"
                 - "connection.timeoutInSecs=120" # Tune ZAP timeout by default to be 2minutes
+                {{ if .Values.zapConfiguration.global}}
                 {{ if .Values.zapConfiguration.global.addonUpdate }}
                 - "-addonupdate"    # Enable AddOn Updates on startup if possible
                 {{- end }}
+                {{- if .Values.zapConfiguration.global.addonInstall }}
                 {{- range .Values.zapConfiguration.global.addonInstall }}
                 - "-addoninstall"
                 - {{ . | quote }}
                 {{- end }}
+                {{- end }}
+                {{- end }}
                 - "-config"
-                - "api.disablekey=true" # Disble API Key. TODO: change with helm random value? -config api.key=change-me-9203935709
+                - "api.disablekey=true" # Disble API Key because not required. Only pod local access allowed (localhost binding).
               resources:
                 {{- toYaml .Values.zapContainer.resources | nindent 16 }}
               securityContext:
@@ -107,11 +120,20 @@ spec:
               envFrom:
                 {{- toYaml .Values.zapContainer.envFrom | nindent 16 }}
               volumeMounts:
+                - mountPath: /home/securecodebox/
+                  name: scan-results
+                  readOnly: false
+                {{ if .Values.zapContainer.extraVolumeMounts }}
                 {{- toYaml .Values.zapContainer.extraVolumeMounts | nindent 16 }}
-              {{- if .Values.zapContainer.extraContainers }}
-              {{- toYaml .Values.zapContainer.extraContainers | nindent 12 }}
-              {{- end }}
+                {{- end }}
               ports:
                 - containerPort: 8080
+            {{- if .Values.zapContainer.extraContainers }}
+            {{- toYaml .Values.zapContainer.extraContainers | nindent 12 }}
+            {{- end }}
           volumes:
             {{- toYaml .Values.scanner.extraVolumes | nindent 12 }}
+          {{- with .Values.scanner.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

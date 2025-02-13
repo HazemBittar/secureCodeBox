@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 # Patterns to ignore when building packages.
@@ -31,9 +31,11 @@ src/*
 config/*
 Dockerfile
 .dockerignore
+docs/*
 *.tar
 hook/*
 integration-tests/*
 examples/*
-docs/*
+coverage/*
 Makefile
+*.license

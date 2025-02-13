@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -12,7 +12,7 @@ test(
     const { categories, severities, count } = await scan(
       "test-scan-read-write-hook",
       "test-scan",
-      [],
+      ["hello-world"],
       90
     );
 

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -11,6 +11,7 @@ import { NotifierType } from "./NotifierType";
 test("Should Match for High Severity Findings", async () => {
   const finding: Finding = {
     name: "test finding",
+    description: "test finding description",
     location: "hostname",
     category: "Open Port",
     severity: "high",
@@ -18,21 +19,24 @@ test("Should Match for High Severity Findings", async () => {
     attributes: new Map(),
   };
 
-  const rules = [{
-    matches: {
-      anyOf: [
-        {
-          severity: "high"
-        }
-      ]
+  const rules = [
+    {
+      matches: {
+        anyOf: [
+          {
+            severity: "high",
+          },
+        ],
+      },
     },
-  }]
+  ];
   expect(matches(finding, rules)).toBeTruthy();
-})
+});
 
 test("Should Not Match for High Severity Findings", async () => {
   const finding: Finding = {
     name: "test finding",
+    description: "test finding description",
     location: "hostname",
     category: "Open Port",
     severity: "high",
@@ -40,22 +44,24 @@ test("Should Not Match for High Severity Findings", async () => {
     attributes: new Map(),
   };
 
-  const rules = [{
-    matches: {
-      anyOf: [
-        {
-          severity: "NOT HIGH"
-        }
-      ]
+  const rules = [
+    {
+      matches: {
+        anyOf: [
+          {
+            severity: "NOT HIGH",
+          },
+        ],
+      },
     },
-  }]
+  ];
   expect(matches(finding, rules)).toBeFalsy();
-
-})
+});
 
 test("Should Match for Multiple 'anyOf' Rules", async () => {
   const finding: Finding = {
     name: "test finding",
+    description: "test finding description",
     location: "hostname",
     category: "Open Port",
     severity: "high",
@@ -63,24 +69,27 @@ test("Should Match for Multiple 'anyOf' Rules", async () => {
     attributes: new Map(),
   };
 
-  const rules = [{
-    matches: {
-      anyOf: [
-        {
-          severity: "NOT HIGH"
-        },
-        {
-          category: "Open Port",
-        }
-      ]
+  const rules = [
+    {
+      matches: {
+        anyOf: [
+          {
+            severity: "NOT HIGH",
+          },
+          {
+            category: "Open Port",
+          },
+        ],
+      },
     },
-  }]
+  ];
   expect(matches(finding, rules)).toBeTruthy();
-})
+});
 
 test("Should NOT Match Multiple 'anyOf' Rules", async () => {
   const finding: Finding = {
     name: "test finding",
+    description: "test finding description",
     location: "hostname",
     category: "Open Port",
     severity: "high",
@@ -88,25 +97,28 @@ test("Should NOT Match Multiple 'anyOf' Rules", async () => {
     attributes: new Map(),
   };
 
-  const rules = [{
-    matches: {
-      anyOf: [
-        {
-          severity: "NOT HIGH"
-        },
-        {
-          category: "NOT OPEN PORT"
-        }
-      ]
+  const rules = [
+    {
+      matches: {
+        anyOf: [
+          {
+            severity: "NOT HIGH",
+          },
+          {
+            category: "NOT OPEN PORT",
+          },
+        ],
+      },
     },
-  }]
+  ];
 
   expect(matches(finding, rules)).toBeFalsy();
-})
+});
 
 test("Should Match Multiple 'and' Rules", async () => {
   const finding: Finding = {
     name: "test finding",
+    description: "test finding description",
     location: "hostname",
     category: "Open Port",
     severity: "high",
@@ -119,28 +131,29 @@ test("Should Match Multiple 'and' Rules", async () => {
       matches: {
         anyOf: [
           {
-            severity: "high"
-          }
-        ]
+            severity: "high",
+          },
+        ],
       },
     },
     {
       matches: {
         anyOf: [
           {
-            category: "Open Port"
-          }
-        ]
+            category: "Open Port",
+          },
+        ],
       },
     },
-  ]
+  ];
 
   expect(matches(finding, rules)).toBeTruthy();
-})
+});
 
 test("Should Not Match Multiple 'and' Rules", async () => {
   const finding: Finding = {
     name: "test finding",
+    description: "test finding description",
     location: "hostname",
     category: "Open Port",
     severity: "high",
@@ -153,28 +166,29 @@ test("Should Not Match Multiple 'and' Rules", async () => {
       matches: {
         anyOf: [
           {
-            severity: "high"
-          }
-        ]
+            severity: "high",
+          },
+        ],
       },
     },
     {
       matches: {
         anyOf: [
           {
-            severity: "low"
-          }
-        ]
+            severity: "low",
+          },
+        ],
       },
     },
-  ]
+  ];
 
   expect(matches(finding, rules)).toBeFalsy();
-})
+});
 
 test("Should Match If No Rules Provided", async () => {
   const finding: Finding = {
     name: "test finding",
+    description: "test finding description",
     location: "hostname",
     category: "Open Port",
     severity: "high",
@@ -183,26 +197,28 @@ test("Should Match If No Rules Provided", async () => {
   };
   const rules = [];
 
-  expect(matches(finding, rules)).toBeTruthy()
-})
+  expect(matches(finding, rules)).toBeTruthy();
+});
 
 test("Should Return Channels", async () => {
-  const channelFile = path.join(__dirname, "./__testfiles__/channels.yaml")
-  const channels = getNotificationChannels(channelFile) as NotificationChannel[];
+  const channelFile = path.join(__dirname, "./__testfiles__/channels.yaml");
+  const channels = getNotificationChannels(
+    channelFile,
+  ) as NotificationChannel[];
   const c: NotificationChannel = {
     name: "slack",
     type: NotifierType.SLACK,
     template: "messageCard",
     rules: [],
-    endPoint: "some.url"
-  }
+    endPoint: "some.url",
+  };
   const expected: NotificationChannel[] = [];
-  expected.push(c)
+  expected.push(c);
   expect(channels).toStrictEqual(expected);
-})
+});
 
 test("Should Map Env Name To endPoint", async () => {
-  const expectedEndPoint = 'webhook.site';
+  const expectedEndPoint = "webhook.site";
   process.env["TEST_ENDPOINT"] = expectedEndPoint;
 
   const endpoint = mapToEndPoint("TEST_ENDPOINT");

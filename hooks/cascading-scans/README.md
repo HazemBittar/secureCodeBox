@@ -7,7 +7,7 @@ usecase: "Cascading Scans based declarative Rules."
 ---
 
 <!--
-SPDX-FileCopyrightText: 2021 iteratec GmbH
+SPDX-FileCopyrightText: the secureCodeBox authors
 
 SPDX-License-Identifier: Apache-2.0
 -->
@@ -26,28 +26,35 @@ Otherwise your changes will be reverted/overwritten automatically due to the bui
 <p align="center">
   <a href="https://opensource.org/licenses/Apache-2.0"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"/></a>
   <a href="https://github.com/secureCodeBox/secureCodeBox/releases/latest"><img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/secureCodeBox/secureCodeBox?sort=semver"/></a>
-  <a href="https://owasp.org/www-project-securecodebox/"><img alt="OWASP Incubator Project" src="https://img.shields.io/badge/OWASP-Incubator%20Project-365EAA"/></a>
+  <a href="https://owasp.org/www-project-securecodebox/"><img alt="OWASP Lab Project" src="https://img.shields.io/badge/OWASP-Lab%20Project-yellow"/></a>
   <a href="https://artifacthub.io/packages/search?repo=securecodebox"><img alt="Artifact HUB" src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/securecodebox"/></a>
   <a href="https://github.com/secureCodeBox/secureCodeBox/"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/secureCodeBox/secureCodeBox?logo=GitHub"/></a>
-  <a href="https://twitter.com/securecodebox"><img alt="Twitter Follower" src="https://img.shields.io/twitter/follow/securecodebox?style=flat&color=blue&logo=twitter"/></a>
+  <a href="https://infosec.exchange/@secureCodeBox"><img alt="Mastodon Follower" src="https://img.shields.io/mastodon/follow/111902499714281911?domain=https%3A%2F%2Finfosec.exchange%2F"/></a>
 </p>
 
 ## What is "Cascading Scans" Hook about?
-The Cascading Scans Hook can be used to orchestrate security scanners based on defined rule sets.
-The so called `CascadingRules` consist of a `matches` section which contains one or multiple rules which are compared against `findings`. When a `finding` matches a `rule` the `scanSpec` section will then be used to create a new scan. To customize the scan to match the finding, the [mustache](https://github.com/janl/mustache.js) templating language can be used to reference fields of the finding.
 
-This Hook is based on the ADR https://docs.securecodebox.io/docs/architecture/adr/adr_0003
+The Cascading Scans Hook can be used to start additional scans based on the results of other scans.
+This allows you to create powerful setups to automatically discover targets, and then trigger more specialized scans for the type of target that was discovered.
+
+![Diagram of CascadingScans showing one amass scans for example.com finding two subdomains. These then trigger a port scan each. An identified ssh port then gets a SSH Scan and a Ncrack scan triggered. A https port gets a sslyze and a nuclei scan triggered.](https://www.securecodebox.io/img/cascades.drawio.svg)
+
+The so called `CascadingRules` consist of a `matches` section which contains one or multiple rules which are compared against `findings`.
+When a `finding` matches a `rule` the `scanSpec` section will then be used to create a new scan.
+To customize the scan to match the finding, the [mustache](https://github.com/janl/mustache.js) templating language can be used to reference fields of the finding.
+
+This Hook is based on the ADR https://www.securecodebox.io/docs/architecture/architecture_decisions/adr_0003/
 
 More information about how to use cascading scans can be found here:
-* Custom Resource Definition: https://docs.securecodebox.io/docs/api/crds/cascading-rule/
-* How-To Network Scanning: https://docs.securecodebox.io/docs/how-tos/scanning-networks/
+* Custom Resource Definition: https://www.securecodebox.io/docs/api/crds/cascading-rule/
+* How-To Network Scanning: https://www.securecodebox.io/docs/how-tos/scanning-networks/
 
 ## Deployment
 The cascading-scans chart can be deployed via helm:
 
 ```bash
 # Install HelmChart (use -n to configure another namespace)
-helm upgrade --install cascading-scans secureCodeBox/cascading-scans
+helm upgrade --install cascading-scans oci://ghcr.io/securecodebox/helm/cascading-scans
 ```
 
 ## Requirements
@@ -71,15 +78,15 @@ There is a configuration option `cascadingRules.enabled` for each scanner to pre
 ```bash
 # Check your CascadingRules
 kubectl get CascadingRules
-NAME             STARTS              INVASIVENESS   INTENSIVENESS
-https-tls-scan   sslyze              non-invasive   light
-imaps-tls-scan   sslyze              non-invasive   light
-nikto-http       nikto               non-invasive   medium
-nmap-smb         nmap                non-invasive   light
-pop3s-tls-scan   sslyze              non-invasive   light
-smtps-tls-scan   sslyze              non-invasive   light
-ssh-scan         ssh-scan            non-invasive   light
-zap-http         zap-baseline-scan   non-invasive   medium
+NAME              STARTS              INVASIVENESS   INTENSIVENESS
+https-tls-scan    sslyze              non-invasive   light
+imaps-tls-scan    sslyze              non-invasive   light
+nikto-http        nikto               non-invasive   medium
+nmap-smb          nmap                non-invasive   light
+pop3s-tls-scan    sslyze              non-invasive   light
+smtps-tls-scan    sslyze              non-invasive   light
+ssh-audit         ssh-audit            non-invasive   light
+zap-http          zap-baseline-scan   non-invasive   medium
 ```
 
 ### Starting a cascading Scan
@@ -109,13 +116,13 @@ You can lookup which CascadingRules this selects by running:
 
 ```bash
 kubectl get CascadingRules -l "securecodebox.io/intensive=light"
-NAME             STARTS     INVASIVENESS   INTENSIVENESS
-https-tls-scan   sslyze     non-invasive   light
-imaps-tls-scan   sslyze     non-invasive   light
-nmap-smb         nmap       non-invasive   light
-pop3s-tls-scan   sslyze     non-invasive   light
-smtps-tls-scan   sslyze     non-invasive   light
-ssh-scan         ssh-scan   non-invasive   light
+NAME              STARTS     INVASIVENESS   INTENSIVENESS
+https-tls-scan    sslyze     non-invasive   light
+imaps-tls-scan    sslyze     non-invasive   light
+nmap-smb          nmap       non-invasive   light
+pop3s-tls-scan    sslyze     non-invasive   light
+smtps-tls-scan    sslyze     non-invasive   light
+ssh-audit         ssh-audit   non-invasive   light
 ```
 
 The label selectors also allow the more powerful matchExpressions selectors:
@@ -145,37 +152,44 @@ This selection can be replicated in kubectl using:
 
 ```bash
 kubectl get CascadingRules -l "securecodebox.io/intensive in (light,medium)"
-NAME             STARTS              INVASIVENESS   INTENSIVENESS
-https-tls-scan   sslyze              non-invasive   light
-imaps-tls-scan   sslyze              non-invasive   light
-nikto-http       nikto               non-invasive   medium
-nmap-smb         nmap                non-invasive   light
-pop3s-tls-scan   sslyze              non-invasive   light
-smtps-tls-scan   sslyze              non-invasive   light
-ssh-scan         ssh-scan            non-invasive   light
-zap-http         zap-baseline-scan   non-invasive   medium
+NAME              STARTS              INVASIVENESS   INTENSIVENESS
+https-tls-scan    sslyze              non-invasive   light
+imaps-tls-scan    sslyze              non-invasive   light
+nikto-http        nikto               non-invasive   medium
+nmap-smb          nmap                non-invasive   light
+pop3s-tls-scan    sslyze              non-invasive   light
+smtps-tls-scan    sslyze              non-invasive   light
+ssh-audit         ssh-audit            non-invasive   light
+zap-http          zap-baseline-scan   non-invasive   medium
 ```
 
 ## Values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| hook.affinity | object | `{}` | Optional affinity settings that control how the hook job is scheduled (see: https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/) |
+| hook.env | list | `[]` | Optional environment variables mapped into the hook (see: https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/) |
+| hook.extraVolumeMounts | list | `[]` | Optional VolumeMounts mapped into the hook (see: https://kubernetes.io/docs/concepts/storage/volumes/) |
+| hook.extraVolumes | list | `[]` | Optional Volumes mapped into the hook (see: https://kubernetes.io/docs/concepts/storage/volumes/) |
 | hook.image.repository | string | `"docker.io/securecodebox/hook-cascading-scans"` | Hook image repository |
 | hook.image.tag | string | defaults to the charts version | The image Tag defaults to the charts version if not defined. |
 | hook.labels | object | `{}` | Add Kubernetes Labels to the hook definition |
 | hook.priority | int | `0` | Hook priority. Higher priority Hooks are guaranteed to execute before low priority Hooks. |
+| hook.resources | object | `{ requests: { cpu: "200m", memory: "100Mi" }, limits: { cpu: "400m", memory: "200Mi" } }` | Optional resources lets you control resource limits and requests for the hook container. See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/ |
+| hook.tolerations | list | `[]` | Optional tolerations settings that control how the hook job is scheduled (see: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) |
 | hook.ttlSecondsAfterFinished | string | `nil` | Seconds after which the kubernetes job for the hook will be deleted. Requires the Kubernetes TTLAfterFinished controller: https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/ |
+| imagePullSecrets | list | `[]` | Define imagePullSecrets when a private registry is used (see: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/) |
 
 ## License
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Code of secureCodeBox is licensed under the [Apache License 2.0][scb-license].
 
-[scb-owasp]: https://www.owasp.org/index.php/OWASP_secureCodeBox
-[scb-docs]: https://docs.securecodebox.io/
-[scb-site]: https://www.securecodebox.io/
-[scb-github]: https://github.com/secureCodeBox/
-[scb-twitter]: https://twitter.com/secureCodeBox
-[scb-slack]: https://join.slack.com/t/securecodebox/shared_invite/enQtNDU3MTUyOTM0NTMwLTBjOWRjNjVkNGEyMjQ0ZGMyNDdlYTQxYWQ4MzNiNGY3MDMxNThkZjJmMzY2NDRhMTk3ZWM3OWFkYmY1YzUxNTU
-[scb-license]: https://github.com/secureCodeBox/secureCodeBox/blob/master/LICENSE
+[scb-owasp]:    https://www.owasp.org/index.php/OWASP_secureCodeBox
+[scb-docs]:     https://www.securecodebox.io/
+[scb-site]:     https://www.securecodebox.io/
+[scb-github]:   https://github.com/secureCodeBox/
+[scb-mastodon]: https://infosec.exchange/@secureCodeBox
+[scb-slack]:    https://owasp.org/slack/invite
+[scb-license]:  https://github.com/secureCodeBox/secureCodeBox/blob/master/LICENSE
 

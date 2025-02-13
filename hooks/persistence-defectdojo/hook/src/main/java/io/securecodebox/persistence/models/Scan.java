@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 package io.securecodebox.persistence.models;
@@ -11,9 +11,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Scan extends V1Scan {
-  public Scan(){}
+  public Scan() {
+    super();
+  }
 
   public Scan(V1Scan other) {
+    this();
     this.setApiVersion(other.getApiVersion());
     this.setKind(other.getKind());
     this.setMetadata(other.getMetadata());
@@ -59,19 +62,19 @@ public class Scan extends V1Scan {
 
   public Optional<List<String>> getEngagementTags() {
     return this.getKey(SecureCodeBoxScanAnnotations.ENGAGEMENT_TAGS).map(
-      (tags) -> new LinkedList<>(Arrays.asList(tags.split(",")))
+      tags -> new LinkedList<>(Arrays.asList(tags.split(",")))
         .stream()
         .map(String::trim)
-        .collect(Collectors.toList())
+        .toList()
     );
   }
 
   public Optional<List<String>> getProductTags() {
     return this.getKey(SecureCodeBoxScanAnnotations.PRODUCT_TAGS).map(
-      (tags) -> new LinkedList<>(Arrays.asList(tags.split(",")))
+      tags -> new LinkedList<>(Arrays.asList(tags.split(",")))
         .stream()
         .map(String::trim)
-        .collect(Collectors.toList())
+        .toList()
     );
   }
 
@@ -79,12 +82,17 @@ public class Scan extends V1Scan {
     return this.getKey(SecureCodeBoxScanAnnotations.PRODUCT_DESCRIPTION);
   }
 
-  public Optional<Boolean>getDeDuplicateOnEngagement(){
+  public Optional<Boolean> getDeDuplicateOnEngagement() {
     return this.getKey(SecureCodeBoxScanAnnotations.ENGAGEMENT_DEDUPLICATE_ON_ENGAGEMENT).map("true"::equals);
   }
 
   public Optional<String> getTestTitle() {
     return this.getKey(SecureCodeBoxScanAnnotations.TEST_TITLE);
+  }
+
+
+  public Optional<String> getMinimumSeverity() {
+    return this.getKey(SecureCodeBoxScanAnnotations.MINIMUM_SEVERITY);
   }
 
   @AllArgsConstructor
@@ -98,7 +106,7 @@ public class Scan extends V1Scan {
     ENGAGEMENT_DEDUPLICATE_ON_ENGAGEMENT("defectdojo.securecodebox.io/engagement-deduplicate-on-engagement"),
     ENGAGEMENT_TAGS("defectdojo.securecodebox.io/engagement-tags"),
     TEST_TITLE("defectdojo.securecodebox.io/test-title"),
-    ;
+    MINIMUM_SEVERITY("defectdojo.securecodebox.io/minimum-severity");
 
     @Getter
     private final String label;

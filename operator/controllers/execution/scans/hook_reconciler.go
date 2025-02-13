@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -7,11 +7,11 @@ package scancontrollers
 import (
 	"context"
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/labels"
 
 	executionv1 "github.com/secureCodeBox/secureCodeBox/operator/apis/execution/v1"
-	"github.com/secureCodeBox/secureCodeBox/operator/utils"
-	util "github.com/secureCodeBox/secureCodeBox/operator/utils"
+	utils "github.com/secureCodeBox/secureCodeBox/operator/utils"
 	batch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -30,23 +30,38 @@ func (r *ScanReconciler) setHookStatus(scan *executionv1.Scan) error {
 		return err
 	}
 
-	var scanCompletionHooks executionv1.ScanCompletionHookList
+	var hookStatuses []*executionv1.HookStatus
 
-	if err := r.List(ctx, &scanCompletionHooks,
-		client.InNamespace(scan.Namespace),
-		client.MatchingLabelsSelector{Selector: labelSelector},
-	); err != nil {
-		r.Log.V(7).Info("Unable to fetch ScanCompletionHooks")
-		return err
+	if scan.Spec.ResourceMode == nil || *scan.Spec.ResourceMode == executionv1.NamespaceLocal {
+		var scanCompletionHooks executionv1.ScanCompletionHookList
+		if err := r.List(ctx, &scanCompletionHooks,
+			client.InNamespace(scan.Namespace),
+			client.MatchingLabelsSelector{Selector: labelSelector},
+		); err != nil {
+			r.Log.V(7).Info(fmt.Sprintf("Unable to fetch ScanCompletionHooks for scan '%s' which is located in namespace '%s'", scan.Name, scan.Namespace))
+			return err
+		}
+
+		hookStatuses = utils.MapHooksToHookStatus(scanCompletionHooks.Items)
+	} else {
+		var clusterScanCompletionHooks executionv1.ClusterScanCompletionHookList
+		if err := r.List(ctx, &clusterScanCompletionHooks,
+			client.MatchingLabelsSelector{Selector: labelSelector},
+		); err != nil {
+			r.Log.V(7).Info(fmt.Sprintf("Unable to fetch ClusterScanCompletionHooks for scan '%s' which is located in namespace '%s'", scan.Name, scan.Namespace))
+			return err
+		}
+
+		hookStatuses = utils.MapClusterHooksToHookStatus(clusterScanCompletionHooks.Items)
 	}
 
-	r.Log.Info("Found ScanCompletionHooks", "ScanCompletionHooks", len(scanCompletionHooks.Items))
+	r.Log.Info("Found ScanCompletionHooks", "ScanCompletionHooks", len(hookStatuses))
 
-	orderedHookStatus := util.FromUnorderedList(scanCompletionHooks.Items)
+	orderedHookStatus := utils.FromUnorderedList(hookStatuses)
 	scan.Status.OrderedHookStatuses = orderedHookStatus
-	scan.Status.State = "HookProcessing"
+	scan.Status.State = executionv1.ScanStateHookProcessing
 
-	if err := r.Status().Update(ctx, scan); err != nil {
+	if err := r.updateScanStatus(ctx, scan); err != nil {
 		r.Log.Error(err, "unable to update Scan status")
 		return err
 	}
@@ -83,14 +98,14 @@ func (r *ScanReconciler) migrateHookStatus(scan *executionv1.Scan) error {
 				Type:     executionv1.ReadOnly,
 			}
 
-			if scan.Status.State == "ReadAndWriteHookProcessing" || scan.Status.State == "ReadAndWriteHookCompleted" {
+			if scan.Status.State == executionv1.ScanStateReadAndWriteHookProcessing || scan.Status.State == executionv1.ScanStateReadAndWriteHookCompleted {
 				// ReadOnly hooks should not have started yet, so mark them all as pending
 				hookStatus.State = executionv1.Pending
-			} else if scan.Status.State == "ReadOnlyHookProcessing" {
+			} else if scan.Status.State == executionv1.ScanStateReadOnlyHookProcessing {
 				// Had already started ReadOnly hooks and should now check status.
 				// No status for ReadOnly in old CRD, so mark everything as InProgress and let processInProgressHook update it later.
 				hookStatus.State = executionv1.InProgress
-			} else if scan.Status.State == "Done" {
+			} else if scan.Status.State == executionv1.ScanStateDone {
 				// Had completely finished
 				hookStatus.State = executionv1.Completed
 			}
@@ -101,12 +116,12 @@ func (r *ScanReconciler) migrateHookStatus(scan *executionv1.Scan) error {
 		}
 	}
 
-	scan.Status.OrderedHookStatuses = util.OrderHookStatusesInsideAPrioClass(append(readOnlyHooks, strSlice...))
-	if scan.Status.State != "Done" {
-		scan.Status.State = "HookProcessing"
+	scan.Status.OrderedHookStatuses = utils.OrderHookStatusesInsideAPrioClass(append(readOnlyHooks, strSlice...))
+	if scan.Status.State != executionv1.ScanStateDone {
+		scan.Status.State = executionv1.ScanStateHookProcessing
 	}
 
-	if err := r.Status().Update(ctx, scan); err != nil {
+	if err := r.updateScanStatus(ctx, scan); err != nil {
 		r.Log.Error(err, "unable to update Scan status")
 		return err
 	}
@@ -121,29 +136,29 @@ func (r *ScanReconciler) migrateHookStatus(scan *executionv1.Scan) error {
 func (r *ScanReconciler) executeHooks(scan *executionv1.Scan) error {
 	ctx := context.Background()
 
-	err, currentHooks := utils.CurrentHookGroup(scan.Status.OrderedHookStatuses)
+	currentHooks, err := utils.CurrentHookGroup(scan.Status.OrderedHookStatuses)
 
-	if err != nil && scan.Status.State == "Errored" {
+	if err != nil && scan.Status.State == executionv1.ScanStateErrored {
 		r.Log.V(8).Info("Skipping hook execution as it already contains failed hooks.")
 		return nil
 	} else if err != nil {
-		scan.Status.State = "Errored"
-		scan.Status.ErrorDescription = fmt.Sprintf("Hook execution failed for a unknown hook. Check the scan.status.hookStatus field for more details")
-	} else if err == nil && currentHooks == nil {
+		scan.Status.State = executionv1.ScanStateErrored
+		scan.Status.ErrorDescription = "hook execution failed for a unknown hook. Check the scan.status.hookStatus field for more details"
+	} else if currentHooks == nil {
 		// No hooks left to execute
-		scan.Status.State = "Done"
+		scan.Status.State = executionv1.ScanStateDone
 	} else {
 		for _, hook := range currentHooks {
 			err = r.processHook(scan, hook)
 
 			if err != nil {
-				scan.Status.State = "Errored"
+				scan.Status.State = executionv1.ScanStateErrored
 				scan.Status.ErrorDescription = fmt.Sprintf("Failed to execute Hook '%s' in job '%s'. Check the logs of the hook for more information.", hook.HookName, hook.JobName)
 			}
 		}
 	}
 
-	if sErr := r.Status().Update(ctx, scan); sErr != nil {
+	if sErr := r.updateScanStatus(ctx, scan); sErr != nil {
 		r.Log.Error(sErr, "Unable to update Scan status")
 		return sErr
 	}
@@ -171,14 +186,29 @@ func (r *ScanReconciler) processHook(scan *executionv1.Scan, nonCompletedHook *e
 
 func (r *ScanReconciler) processPendingHook(scan *executionv1.Scan, status *executionv1.HookStatus, jobType string) error {
 	ctx := context.Background()
-
-	var hook executionv1.ScanCompletionHook
-
 	var err error
-	err = r.Get(ctx, types.NamespacedName{Name: status.HookName, Namespace: scan.Namespace}, &hook)
-	if err != nil {
-		r.Log.Error(err, "Failed to get Hook for HookStatus")
-		return err
+
+	var hookName string
+	var hookSpec executionv1.ScanCompletionHookSpec
+
+	if scan.Spec.ResourceMode == nil || *scan.Spec.ResourceMode == executionv1.NamespaceLocal {
+		var hook executionv1.ScanCompletionHook
+		err = r.Get(ctx, types.NamespacedName{Name: status.HookName, Namespace: scan.Namespace}, &hook)
+		if err != nil {
+			r.Log.Error(err, fmt.Sprintf("Failed to get ScanCompletionHook '%s' configured for scan '%s' which is located in namespace '%s'", status.HookName, scan.Name, scan.Namespace))
+			return err
+		}
+		hookName = hook.Name
+		hookSpec = hook.Spec
+	} else if *scan.Spec.ResourceMode == executionv1.ClusterWide {
+		var clusterHook executionv1.ClusterScanCompletionHook
+		err = r.Get(ctx, types.NamespacedName{Name: status.HookName}, &clusterHook)
+		if err != nil {
+			r.Log.Error(err, fmt.Sprintf("Failed to get ClusterScanCompletionHook '%s' configured for scan '%s' which is located in namespace '%s'", status.HookName, scan.Name, scan.Namespace))
+			return err
+		}
+		hookName = clusterHook.Name
+		hookSpec = clusterHook.Spec
 	}
 
 	var jobs *batch.JobList
@@ -196,13 +226,19 @@ func (r *ScanReconciler) processPendingHook(scan *executionv1.Scan, status *exec
 		return nil
 	}
 
+	urlExpirationDuration, err := utils.GetUrlExpirationDuration(utils.HookController)
+	if err != nil {
+		r.Log.Error(err, "Failed to parse hook url expiration")
+		panic(err)
+	}
+
 	var rawFileURL string
-	rawFileURL, err = r.PresignedGetURL(scan.UID, scan.Status.RawResultFile, defaultPresignDuration)
+	rawFileURL, err = r.PresignedGetURL(*scan, scan.Status.RawResultFile, urlExpirationDuration)
 	if err != nil {
 		return err
 	}
 	var findingsFileURL string
-	findingsFileURL, err = r.PresignedGetURL(scan.UID, "findings.json", defaultPresignDuration)
+	findingsFileURL, err = r.PresignedGetURL(*scan, "findings.json", urlExpirationDuration)
 	if err != nil {
 		return err
 	}
@@ -211,14 +247,14 @@ func (r *ScanReconciler) processPendingHook(scan *executionv1.Scan, status *exec
 		rawFileURL,
 		findingsFileURL,
 	}
-	if hook.Spec.Type == executionv1.ReadAndWrite {
+	if hookSpec.Type == executionv1.ReadAndWrite {
 		var rawFileUploadURL string
-		rawFileUploadURL, err = r.PresignedPutURL(scan.UID, scan.Status.RawResultFile, defaultPresignDuration)
+		rawFileUploadURL, err = r.PresignedPutURL(*scan, scan.Status.RawResultFile, urlExpirationDuration)
 		if err != nil {
 			return err
 		}
 		var findingsUploadURL string
-		findingsUploadURL, err = r.PresignedPutURL(scan.UID, "findings.json", defaultPresignDuration)
+		findingsUploadURL, err = r.PresignedPutURL(*scan, "findings.json", urlExpirationDuration)
 		if err != nil {
 			return err
 		}
@@ -227,7 +263,8 @@ func (r *ScanReconciler) processPendingHook(scan *executionv1.Scan, status *exec
 
 	var jobName string
 	jobName, err = r.createJobForHook(
-		&hook,
+		hookName,
+		&hookSpec,
 		scan,
 		args,
 	)
@@ -268,36 +305,7 @@ func (r *ScanReconciler) processInProgressHook(scan *executionv1.Scan, status *e
 	return nil
 }
 
-func (r *ScanReconciler) createJobForHook(hook *executionv1.ScanCompletionHook, scan *executionv1.Scan, cliArgs []string) (string, error) {
-	ctx := context.Background()
-
-	serviceAccountName := "scan-completion-hook"
-	if hook.Spec.ServiceAccountName != nil {
-		// Hook uses a custom ServiceAccount
-		serviceAccountName = *hook.Spec.ServiceAccountName
-	} else {
-		// Check and create a serviceAccount for the hook in its namespace, if it doesn't already exist.
-		rules := []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{"execution.securecodebox.io"},
-				Resources: []string{"scans"},
-				Verbs:     []string{"get"},
-			},
-			{
-				APIGroups: []string{"execution.securecodebox.io"},
-				Resources: []string{"scans/status"},
-				Verbs:     []string{"get", "patch"},
-			},
-		}
-
-		r.ensureServiceAccountExists(
-			hook.Namespace,
-			serviceAccountName,
-			"ScanCompletionHooks need to access the current scan to view where its results are stored",
-			rules,
-		)
-	}
-
+func generateJobForHook(hookName string, hookSpec *executionv1.ScanCompletionHookSpec, scan *executionv1.Scan, cliArgs []string, serviceAccountName string) *batch.Job {
 	standardEnvVars := []corev1.EnvVar{
 		{
 			Name: "NAMESPACE",
@@ -318,54 +326,62 @@ func (r *ScanReconciler) createJobForHook(hook *executionv1.ScanCompletionHook, 
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	if hook.Spec.Type == executionv1.ReadAndWrite {
+	if hookSpec.Type == executionv1.ReadAndWrite {
 		labels["securecodebox.io/job-type"] = "read-and-write-hook"
-	} else if hook.Spec.Type == executionv1.ReadOnly {
+	} else if hookSpec.Type == executionv1.ReadOnly {
 		labels["securecodebox.io/job-type"] = "read-only-hook"
 	}
-	labels["securecodebox.io/hook-name"] = hook.Name
+	labels["securecodebox.io/hook-name"] = hookName
 
 	var backOffLimit int32 = 3
 	truePointer := true
 	falsePointer := false
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("100Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("400m"),
+			corev1.ResourceMemory: resource.MustParse("200Mi"),
+		},
+	}
+	if len(hookSpec.Resources.Requests) != 0 || len(hookSpec.Resources.Limits) != 0 {
+		resources = hookSpec.Resources
+	}
+
 	job := &batch.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations:  make(map[string]string),
-			GenerateName: util.TruncateName(fmt.Sprintf("%s-%s", hook.Name, scan.Name)),
+			GenerateName: utils.TruncateName(fmt.Sprintf("%s-%s", hookName, scan.Name)),
 			Namespace:    scan.Namespace,
 			Labels:       labels,
 		},
 		Spec: batch.JobSpec{
-			TTLSecondsAfterFinished: hook.Spec.TTLSecondsAfterFinished,
+			TTLSecondsAfterFinished: hookSpec.TTLSecondsAfterFinished,
 			BackoffLimit:            &backOffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app.kubernetes.io/managed-by": "securecodebox",
+					},
 					Annotations: map[string]string{
 						"auto-discovery.securecodebox.io/ignore": "true",
-						"sidecar.istio.io/inject":                "false",
+						"sidecar.istio.io/inject":                allowIstioSidecarInjectionInJobs,
 					},
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: serviceAccountName,
 					RestartPolicy:      corev1.RestartPolicyNever,
-					ImagePullSecrets:   hook.Spec.ImagePullSecrets,
+					ImagePullSecrets:   hookSpec.ImagePullSecrets,
 					Containers: []corev1.Container{
 						{
 							Name:            "hook",
-							Image:           hook.Spec.Image,
+							Image:           hookSpec.Image,
 							Args:            cliArgs,
-							Env:             append(hook.Spec.Env, standardEnvVars...),
-							ImagePullPolicy: hook.Spec.ImagePullPolicy,
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("200m"),
-									corev1.ResourceMemory: resource.MustParse("100Mi"),
-								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("400m"),
-									corev1.ResourceMemory: resource.MustParse("200Mi"),
-								},
-							},
+							Env:             append(standardEnvVars, hookSpec.Env...),
+							ImagePullPolicy: hookSpec.ImagePullPolicy,
+							Resources:       resources,
 							SecurityContext: &corev1.SecurityContext{
 								RunAsNonRoot:             &truePointer,
 								AllowPrivilegeEscalation: &falsePointer,
@@ -382,25 +398,70 @@ func (r *ScanReconciler) createJobForHook(hook *executionv1.ScanCompletionHook, 
 		},
 	}
 
-	r.Log.V(8).Info("Configuring customCACerts for Hook")
 	injectCustomCACertsIfConfigured(job)
 
-	// Merge Env from HookTemplate
-	job.Spec.Template.Spec.Containers[0].Env = append(
-		job.Spec.Template.Spec.Containers[0].Env,
-
-		hook.Spec.Env...,
-	)
 	// Merge VolumeMounts from HookTemplate
 	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
 		job.Spec.Template.Spec.Containers[0].VolumeMounts,
-		hook.Spec.VolumeMounts...,
+		hookSpec.VolumeMounts...,
 	)
 	// Merge Volumes from HookTemplate
 	job.Spec.Template.Spec.Volumes = append(
 		job.Spec.Template.Spec.Volumes,
-		hook.Spec.Volumes...,
+		hookSpec.Volumes...,
 	)
+
+	// Set affinity from Scan, if one is set. Otherwise keep value from template
+	if scan.Spec.Affinity != nil {
+		job.Spec.Template.Spec.Affinity = scan.Spec.Affinity
+	} else {
+		job.Spec.Template.Spec.Affinity = hookSpec.Affinity
+	}
+
+	// Merge NodeSelectors from Hook & Scan into Hook Job
+	job.Spec.Template.Spec.NodeSelector = utils.MergeStringMaps(job.Spec.Template.Spec.NodeSelector, hookSpec.NodeSelector, scan.Spec.NodeSelector)
+
+	// Replace tolerations from template with those from the scan, if specified.
+	// Otherwise, stick to those from the template
+	if scan.Spec.Tolerations != nil {
+		job.Spec.Template.Spec.Tolerations = scan.Spec.Tolerations
+	} else {
+		job.Spec.Template.Spec.Tolerations = hookSpec.Tolerations
+	}
+	return job
+}
+
+func (r *ScanReconciler) createJobForHook(hookName string, hookSpec *executionv1.ScanCompletionHookSpec, scan *executionv1.Scan, cliArgs []string) (string, error) {
+	ctx := context.Background()
+
+	serviceAccountName := "scan-completion-hook"
+	if hookSpec.ServiceAccountName != nil {
+		// Hook uses a custom ServiceAccount
+		serviceAccountName = *hookSpec.ServiceAccountName
+	} else {
+		// Check and create a serviceAccount for the hook in its namespace, if it doesn't already exist.
+		rules := []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"execution.securecodebox.io"},
+				Resources: []string{"scans"},
+				Verbs:     []string{"get"},
+			},
+			{
+				APIGroups: []string{"execution.securecodebox.io"},
+				Resources: []string{"scans/status"},
+				Verbs:     []string{"get", "patch"},
+			},
+		}
+
+		r.ensureServiceAccountExists(
+			scan.Namespace,
+			serviceAccountName,
+			"ScanCompletionHooks need to access the current scan to view where its results are stored",
+			rules,
+		)
+	}
+
+	job := generateJobForHook(hookName, hookSpec, scan, cliArgs, serviceAccountName)
 
 	if err := ctrl.SetControllerReference(scan, job, r.Scheme); err != nil {
 		r.Log.Error(err, "Unable to set controllerReference on job", "job", job)

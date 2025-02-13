@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,13 +8,13 @@ contexts:
   # Name to be used to refer to this context in other jobs, mandatory
   - name: secureCodeBoxScanType-NoAuth
     # The top level url, mandatory, everything under this will be included
-    url: https://docs.secureCodeBox.io/
+    url: https://www.securecodebox.io/
     # An optional list of regexes to include
     includePaths:
-      - "https://docs.secureCodeBox.io.*"
+      - "https://www.securecodebox.io.*"
     # An optional list of regexes to exclude
     excludePaths:
-      - "https://docs.secureCodeBox.io/authserver/v1/.*"
+      - "https://www.securecodebox.io/authserver/v1/.*"
       - ".*\\.js"
       - ".*\\.css"
       - ".*\\.png"
@@ -25,7 +25,7 @@ spiders:
     # String: Name of the context to spider, default: first context
     context: secureCodeBoxScanType-NoAuth
     # String: Url to start spidering from, default: first context URL
-    url: https://docs.secureCodeBox.io/
+    url: https://www.securecodebox.io/
     # Int: Fail if spider finds less than the specified number of URLs, default: 0
     failIfFoundUrlsLessThan: 0
     # Int: Warn if spider finds less than the specified number of URLs, default: 0
@@ -34,7 +34,7 @@ spiders:
     maxDuration: 0
     # Int: The maximum tree depth to explore, default 5
     maxDepth: 5
-    # Int: The maximum number of children to add to each node in the tree                     
+    # Int: The maximum number of children to add to each node in the tree
     maxChildren: 10
     # Bool: Whether the spider will accept cookies, default: true
     acceptCookies: true
@@ -62,9 +62,9 @@ spiders:
     requestWaitTime: 200
     # Bool: Whether the spider will send the referer header, default: true
     sendRefererHeader: true
-    # Int: The number of spider threads, default: 2             
+    # Int: The number of spider threads, default: 2
     threadCount: 2
-    # String: The user agent to use in requests, default: '' - use the default ZAP one               
+    # String: The user agent to use in requests, default: '' - use the default ZAP one
     userAgent: "secureCodeBox / ZAP Spider"
 
 scanners:
@@ -72,12 +72,12 @@ scanners:
     # String: Name of the context to attack, default: first context
     context: secureCodeBoxScanType-NoAuth
     # String: Url to start scaning from, default: first context URL
-    url: https://docs.secureCodeBox.io/
+    url: https://www.securecodebox.io/
     # String: Name of the scan policy to be used, default: Default Policy
     policy: "Default Policy"
     # Int: The max time in minutes any individual rule will be allowed to run for, default: 0 unlimited
     maxRuleDurationInMins: 0
-    # Int: The max time in minutes the active scanner will be allowed to run for, default: 0 unlimited          
+    # Int: The max time in minutes the active scanner will be allowed to run for, default: 0 unlimited
     maxScanDurationInMins: 0
     # Bool: If set will add an extra query parameter to requests that do not have one, default: false
     addQueryParam: false
@@ -87,7 +87,7 @@ scanners:
     delayInMs: 0
     # Bool: If set then automatically handle anti CSRF tokens, default: false
     handleAntiCSRFTokens: false
-    # Bool: If set then the relevant rule Id will be injected into the X-ZAP-Scan-ID header of each request, default: false           
+    # Bool: If set then the relevant rule Id will be injected into the X-ZAP-Scan-ID header of each request, default: false
     injectPluginIdInHeader: false
     # Bool: If set then the headers of requests that do not include any parameters will be scanned, default: false
     scanHeadersAllRequests: false

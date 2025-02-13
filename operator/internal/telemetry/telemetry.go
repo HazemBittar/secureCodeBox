@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -24,24 +24,36 @@ var telemetryInterval = 24 * time.Hour
 // officialScanTypes contains the list of official secureCodeBox Scan Types.
 // Unofficial Scan Types should be reported as "other" to avoid leakage of confidential data via the scan-types name
 var officialScanTypes map[string]bool = map[string]bool{
-	"amass":                  true,
-	"angularjs-csti-scanner": true,
-	"git-repo-scanner":       true,
-	"gitleaks":               true,
-	"kube-hunter":            true,
-	"kubeaudit":              true,
-	"ncrack":                 true,
-	"nikto":                  true,
-	"nmap":                   true,
-	"screenshooter":          true,
-	"ssh-scan":               true,
-	"sslyze":                 true,
-	"trivy":                  true,
-	"wpscan":                 true,
-	"zap-baseline-scan":      true,
-	"zap-api-scan":           true,
-	"zap-full-scan":          true,
-	"zap-advanced-scan":      true,
+	"amass":                    true,
+	"cmseek":                   true,
+	"doggo":                    true,
+	"ffuf":                     true,
+	"git-repo-scanner":         true,
+	"gitleaks":                 true,
+	"kube-hunter":              true,
+	"kubeaudit":                true,
+	"ncrack":                   true,
+	"nikto":                    true,
+	"nmap":                     true,
+	"nuclei":                   true,
+	"screenshooter":            true,
+	"semgrep":                  true,
+	"ssh-audit":                true,
+	"ssh-scan":                 true, // deprecated. we'll keep it in this list to still recieve telemetry data from older versions
+	"sslyze":                   true,
+	"trivy-image":              true,
+	"trivy-filesystem":         true,
+	"trivy-repo":               true,
+	"trivy-sbom-image":         true,
+	"typo3scan":                true,
+	"whatweb":                  true,
+	"wpscan":                   true,
+	"zap-baseline-scan":        true,
+	"zap-api-scan":             true,
+	"zap-full-scan":            true,
+	"zap-automation-scan":      true,
+	"zap-automation-framework": true,
+	"zap-advanced-scan":        true,
 }
 
 // telemetryData submitted by operator
@@ -52,7 +64,7 @@ type telemetryData struct {
 
 // Loop Submits Telemetry Data in a regular interval
 func Loop(apiClient client.Client, log logr.Logger) {
-	log.Info("The Operator sends anonymous telemetry data, to give the team an overview how much the secureCodeBox is used. Find out more at https://docs.securecodebox.io/docs/telemetry")
+	log.Info("The Operator sends anonymous telemetry data, to give the team an overview how much the secureCodeBox is used. Find out more at https://www.securecodebox.io/docs/telemetry")
 
 	// Wait 1hour to give users time to uninstall / disable telemetry
 	time.Sleep(1 * time.Hour)
@@ -62,7 +74,7 @@ func Loop(apiClient client.Client, log logr.Logger) {
 		if envVersion, ok := os.LookupEnv("VERSION"); ok {
 			version = envVersion
 		} else {
-			version = "unkown"
+			version = "unknown"
 		}
 
 		ctx := context.Background()
@@ -97,7 +109,7 @@ func Loop(apiClient client.Client, log logr.Logger) {
 		if err != nil {
 			log.Error(err, "Failed to encode telemetry data to json")
 		}
-		response, err := http.Post("https://telemetry.chase.securecodebox.io/v1/submit", "application/json", bytes.NewBuffer(reqBody))
+		response, err := http.Post("https://telemetry.securecodebox.io/v1/submit", "application/json", bytes.NewBuffer(reqBody))
 		if err != nil {
 			log.Error(err, "Failed to send telemetry data")
 		}

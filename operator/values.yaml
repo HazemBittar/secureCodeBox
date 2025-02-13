@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,6 +8,9 @@
 
 # telemetryEnabled -- The Operator sends anonymous telemetry data, to give the team an overview how much the secureCodeBox is used. Find out more at https://www.securecodebox.io/telemetry
 telemetryEnabled: true
+
+# -- Define imagePullSecrets when a private registry is used (see: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)
+imagePullSecrets: []
 
 image:
   # image.repository -- The operator image repository
@@ -52,6 +55,14 @@ securityContext:
 # -- Sets the securityContext on the operators pod level. See: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
 podSecurityContext: {}
 
+nodeSelector: {}
+
+# -- Configuration for the metrics the operator exports
+metrics:
+  serviceMonitor:
+    # -- Creates a prometheus operator ServiceMonitor rule to automatically scrape the operators metrics: https://github.com/prometheus-operator/prometheus-operator
+    enabled: false
+
 lurker:
   image:
     # lurker.image.repository -- The operator image repository
@@ -62,24 +73,27 @@ lurker:
     # -- Image pull policy. One of Always, Never, IfNotPresent. Defaults to Always if :latest tag is specified, or IfNotPresent otherwise. More info: https://kubernetes.io/docs/concepts/containers/images#updating-images
     pullPolicy: IfNotPresent
 
+# -- Minio default config. More config options an info: https://github.com/minio/minio/blob/master/helm/minio/values.yaml
 minio:
   # -- Enable this to use minio as storage backend instead of a cloud bucket provider like AWS S3, Google Cloud Storage, DigitalOcean Spaces etc.
   enabled: true
   tls:
     enabled: false
-    certSecret: minio-tls
-  defaultBucket:
-    enabled: true
-    name: "securecodebox"
+  defaultBuckets: "securecodebox"
   # Overwrite Minio's default 4Gi memory request
   resources:
     requests:
       memory: "256Mi"
+  auth:
+    rootUser: "admin" # placeholder user
+    rootPassword: "password" # placeholder password
 
 # Config for external s3 systems
 s3:
-  # s3.enabled Enable this and disable minio if you want to directly connect agains AWS S3, Google Cloud Storage, DigitalOcean Spaces etc.
+  # s3.enabled Enable this and disable minio if you want to directly connect against AWS S3, Google Cloud Storage, DigitalOcean Spaces etc.
   enabled: false
+  tls:
+    enabled: true
   endpoint: "fra1.digitaloceanspaces.com"
   bucket: "my-bucket"
   # Implicit 443. You probably only need to change this when the system uses a non default port
@@ -89,7 +103,7 @@ s3:
   # Name to a k8s secret in the same namespace as this release with credentials to the s3 bucket. Only used when s3.authType is set to "access-secret-key"
   # By default this assumes to have 'accesskey' and 'secretkey' as attributes
   # Example creation via kubectl:
-  # kubectl create secret generic my-secret --from-literal=accessKey="******" --from-literal="secretKey=******"
+  # kubectl create secret generic my-secret --from-literal=accesskey='******' --from-literal=secretkey='******' -n <namespace>
   keySecret: my-secret
   # Names to the attributes in the s3 secret
   secretAttributeNames:
@@ -98,6 +112,9 @@ s3:
   # s3.awsStsEndpoint -- STS Endpoint used in AWS IRSA Authentication. Change this to the sts endpoint of your aws region. Only used when s3.authType is set to "aws-irsa"
   awsStsEndpoint: "https://sts.amazonaws.com"
 
+  # -- Go Template that generates the path used to store raw result file and findings.json file in the s3 bucket. Can be used to store the files in a subfolder of the s3 bucket
+  # @default -- scan-{{ .Scan.UID }}/{{ .Filename }}
+  urlTemplate: null
 # resources -- CPU/memory resource requests/limits (see: https://kubernetes.io/docs/tasks/configure-pod-container/assign-memory-resource/, https://kubernetes.io/docs/tasks/configure-pod-container/assign-cpu-resource/)
 resources:
   limits:
@@ -106,3 +123,11 @@ resources:
   requests:
     cpu: 100m
     memory: 20Mi
+# presignedUrlExpirationTimes -- Duration how long presigned urls are valid
+presignedUrlExpirationTimes:
+  scanners: "12h"
+  parsers: "1h"
+  hooks: "1h"
+
+# -- Sets the value of the istio sidecar annotation ("sidecar.istio.io/inject") for jobs started by the operator (scans, parser and hooks). defaults to false to prevent jobs hanging indefinitely due to the sidecar never terminating. If you aren't using istio this setting/annotation has no effect.
+allowIstioSidecarInjectionInJobs: false

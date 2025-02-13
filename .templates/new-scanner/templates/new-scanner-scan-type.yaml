@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -12,6 +12,7 @@ spec:
     location: "/home/securecodebox/new-scanner-results.json"
   jobTemplate:
     spec:
+      suspend: {{ .Values.scanner.suspend | default false }}
       {{- if .Values.scanner.ttlSecondsAfterFinished }}
       ttlSecondsAfterFinished: {{ .Values.scanner.ttlSecondsAfterFinished }}
       {{- end }}
@@ -19,9 +20,16 @@ spec:
       {{- if .Values.scanner.activeDeadlineSeconds }}
       activeDeadlineSeconds: {{ .Values.scanner.activeDeadlineSeconds }}
       {{- end }}
+
       template:
         spec:
           restartPolicy: OnFailure
+          affinity:
+            {{- toYaml .Values.scanner.affinity | nindent 12 }}
+          tolerations: 
+            {{- toYaml .Values.scanner.tolerations | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.scanner.podSecurityContext | nindent 12 }}
           containers:
             - name: new-scanner
               image: "{{ .Values.scanner.image.repository }}:{{ .Values.scanner.image.tag | default .Chart.AppVersion }}"
@@ -42,3 +50,7 @@ spec:
             {{- end }}
           volumes:
             {{- toYaml .Values.scanner.extraVolumes | nindent 12 }}
+          {{- with .Values.scanner.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

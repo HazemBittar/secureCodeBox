@@ -1,6 +1,9 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
+
+# The CI runs on ubuntu-22.04; More info about the installed software is found here:
+# https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md
 
 on:
   release:
@@ -9,9 +12,9 @@ name: "Publish Helm Charts"
 jobs:
   helm:
     name: Package and Publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: "Install yq"
         run: |
           sudo snap install yq

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -28,6 +28,10 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
         {{ .Values.podSecurityContext | toYaml | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - command:
             - /manager
@@ -42,16 +46,21 @@ spec:
           {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           name: manager
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: healthchecks
+              containerPort: 8081
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8081
+              port: healthchecks
             initialDelaySeconds: 15
             periodSeconds: 20
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8081
+              port: healthchecks
             initialDelaySeconds: 5
             periodSeconds: 10
           env:
@@ -71,18 +80,18 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: "{{ .Release.Name }}-minio"
-                  key: accesskey
+                  key: root-user
             - name: MINIO_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: "{{ .Release.Name }}-minio"
-                  key: secretkey
+                  key: root-password
             - name: S3_BUCKET
-              value: {{ .Values.minio.defaultBucket.name }}
+              value: {{ .Values.minio.defaultBuckets }}
             {{- else }}
             - name: S3_USE_SSL
               # Always use tls when connecting to outside the cluster.
-              value: "true"
+              value: "{{ .Values.s3.tls.enabled }}"
             - name: S3_ENDPOINT
               value: {{ .Values.s3.endpoint | quote }}
             - name: S3_BUCKET
@@ -120,8 +129,24 @@ spec:
             - name: CUSTOM_CA_CERTIFICATE_NAME
               value: {{ .Values.customCACertificate.certificate | quote }}
             {{ end }}
+            {{- if .Values.s3.urlTemplate }}
+            - name: S3_URL_TEMPLATE
+              value: {{ .Values.s3.urlTemplate | quote }}
+            {{ end }}
+            - name: URL_EXPIRATION_SCAN
+              value: {{ .Values.presignedUrlExpirationTimes.scanners | quote }}
+            - name: URL_EXPIRATION_PARSER
+              value: {{ .Values.presignedUrlExpirationTimes.parsers | quote }}
+            - name: URL_EXPIRATION_HOOK
+              value: {{ .Values.presignedUrlExpirationTimes.hooks | quote }}
+            - name: ALLOW_ISTIO_SIDECAR_INJECTION_IN_JOBS
+              value: {{ .Values.allowIstioSidecarInjectionInJobs | quote }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       terminationGracePeriodSeconds: 10

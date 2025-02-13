@@ -1,29 +1,28 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
 import { SlackNotifier } from "./SlackNotifier";
-import axios from 'axios'
+import axios from "axios";
 import { NotificationChannel } from "../model/NotificationChannel";
 import { NotifierType } from "../NotifierType";
 import { Scan } from "../model/Scan";
 
-jest.mock('axios');
+jest.mock("axios");
 
 beforeEach(() => {
   jest.clearAllMocks();
-})
+});
 
 const channel: NotificationChannel = {
   name: "Channel Name",
   type: NotifierType.SLACK,
   template: "slack-messageCard",
   rules: [],
-  endPoint: "https://hooks.slack.com/services/<YOUR_TOKEN>"
+  endPoint: "https://hooks.slack.com/services/<YOUR_TOKEN>",
 };
 
 test("Should Send Message With Findings And Severities", async () => {
-
   const scan: Scan = {
     metadata: {
       uid: "09988cdf-1fc7-4f85-95ee-1b1d65dbc7cc",
@@ -41,7 +40,7 @@ test("Should Send Message With Findings And Severities", async () => {
     },
     status: {
       findingDownloadLink:
-        "https://my-secureCodeBox-instance.com/scan-b9as-sdweref--sadf-asdfsdf-dasdgf-asdffdsfa7/findings.json",
+        "https://s3.securecodebox.example.com/scan-b9as-sdweref--sadf-asdfsdf-dasdgf-asdffdsfa7/findings.json",
       findings: {
         categories: {
           "A Client Error response code was returned by the server": 1,
@@ -58,7 +57,7 @@ test("Should Send Message With Findings And Severities", async () => {
       },
       finishedAt: new Date("2020-05-25T02:38:13Z"),
       rawResultDownloadLink:
-        "https://my-secureCodeBox-instance.com/scan-blkfsdg-sdgfsfgd-sfg-sdfg-dfsg-gfs98-e8af2172caa7/zap-results.json?Expires=1601691232",
+        "https://s3.securecodebox.example.com/scan-blkfsdg-sdgfsfgd-sfg-sdfg-dfsg-gfs98-e8af2172caa7/zap-results.json?Expires=1601691232",
       rawResultFile: "zap-results.json",
       rawResultType: "zap-json",
       state: "Done",
@@ -67,7 +66,7 @@ test("Should Send Message With Findings And Severities", async () => {
 
   const slackNotifier = new SlackNotifier(channel, scan, [], []);
   slackNotifier.sendMessage();
-  expect(axios.post).toBeCalled();
+  expect(axios.post).toHaveBeenCalled();
 });
 
 test("Should Send Minimal Template For Empty Findings", async () => {
@@ -88,11 +87,11 @@ test("Should Send Minimal Template For Empty Findings", async () => {
     },
     status: {
       findingDownloadLink:
-        "https://my-secureCodeBox-instance.com/scan-b9as-sdweref--sadf-asdfsdf-dasdgf-asdffdsfa7/findings.json",
+        "https://s3.securecodebox.example.com/scan-b9as-sdweref--sadf-asdfsdf-dasdgf-asdffdsfa7/findings.json",
       findings: {},
       finishedAt: new Date("2020-05-25T02:38:13Z"),
       rawResultDownloadLink:
-        "https://my-secureCodeBox-instance.com/scan-blkfsdg-sdgfsfgd-sfg-sdfg-dfsg-gfs98-e8af2172caa7/zap-results.json?Expires=1601691232",
+        "https://s3.securecodebox.example.com/scan-blkfsdg-sdgfsfgd-sfg-sdfg-dfsg-gfs98-e8af2172caa7/zap-results.json?Expires=1601691232",
       rawResultFile: "zap-results.json",
       rawResultType: "zap-json",
       state: "Done",
@@ -101,5 +100,5 @@ test("Should Send Minimal Template For Empty Findings", async () => {
 
   const n = new SlackNotifier(channel, scan, [], []);
   n.sendMessage();
-  expect(axios.post).toBeCalled();
-})
+  expect(axios.post).toHaveBeenCalled();
+});

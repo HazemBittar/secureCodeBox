@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2021 iteratec GmbH
+// SPDX-FileCopyrightText: the secureCodeBox authors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -47,7 +47,6 @@ public class SecureCodeBoxFinding {
     HIGH,
     MEDIUM,
     LOW,
-    INFORMATIONAL
-    ;
+    INFORMATIONAL;
   }
 }

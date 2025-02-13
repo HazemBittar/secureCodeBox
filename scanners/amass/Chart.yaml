@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,18 +8,19 @@ description: A Helm chart for the Amass security scanner that integrates with th
 type: application
 # version - gets automatically set to the secureCodeBox release version when the helm charts gets published
 version: v3.1.0-alpha1
-appVersion: "v3.15.0"
+appVersion: "v4.2.0"
 kubeVersion: ">=v1.11.0-0"
 annotations:
   versionApi: https://api.github.com/repos/OWASP/Amass/releases/latest
+  supported-platforms: linux/amd64,linux/arm64
 keywords:
   - security
   - amass
   - subdomain
   - scanner
   - secureCodeBox
-home: https://docs.securecodebox.io/docs/scanners/Amass
-icon: https://docs.securecodebox.io/img/integrationIcons/Amass.svg
+home: https://www.securecodebox.io/docs/scanners/Amass
+icon: https://www.securecodebox.io/img/integrationIcons/Amass.svg
 sources:
   - https://github.com/secureCodeBox/secureCodeBox
 maintainers:

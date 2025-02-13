@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,7 +8,7 @@ metadata:
   annotations:
     description: DeclarativeCombinedScansHooks needs to have the rights to create new scans and the usual patch rules to update the scan status
   name: cascading-scans
-  namespace: {{ .Release.Namespace }}
+  namespace: {{.Release.Namespace}}
 rules:
   - apiGroups:
       - execution.securecodebox.io
@@ -17,6 +17,12 @@ rules:
     verbs:
       - get
       - create
+  - apiGroups:
+      - execution.securecodebox.io
+    resources:
+      - parsedefinitions
+    verbs:
+      - get
   - apiGroups:
       - execution.securecodebox.io
     resources:

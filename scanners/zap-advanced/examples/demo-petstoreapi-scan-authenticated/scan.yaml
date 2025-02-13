@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 iteratec GmbH
+# SPDX-FileCopyrightText: the secureCodeBox authors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -127,8 +127,6 @@ apiVersion: "execution.securecodebox.io/v1"
 kind: Scan
 metadata:
   name: "zap-advanced-api-scan-petstore"
-  labels:
-    organization: "OWASP"
 spec:
   scanType: "zap-advanced-scan"
   parameters:
